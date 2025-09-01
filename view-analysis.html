@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>学习分析报告</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"></script>
+    
+    <!-- Tailwind 配置 -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#165DFF',
+                        secondary: '#36CFBF',
+                        accent: '#722ED1',
+                        warning: '#FF7D00',
+                        success: '#00B42A',
+                        danger: '#F53F3F',
+                        gray: {
+                            50: '#F2F3F5',
+                            100: '#E5E6EB',
+                            200: '#C9CDD4',
+                            300: '#86909C',
+                            400: '#4E5969',
+                            500: '#1D2129',
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                    boxShadow: {
+                        'card': '0 4px 12px rgba(0, 0, 0, 0.05)',
+                    }
+                },
+            }
+        }
+    </script>
+    
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .btn-primary {
+                @apply bg-primary text-white px-4 py-2 rounded-lg font-medium transition-all duration-300 hover:bg-primary/90 hover:shadow-md;
+            }
+            .card {
+                @apply bg-white rounded-xl shadow-card overflow-hidden;
+            }
+            .section-title {
+                @apply text-lg font-semibold text-gray-500 mb-4 flex items-center;
+            }
+            .section-title i {
+                @apply mr-2 text-primary;
+            }
+            .fade-in {
+                animation: fadeIn 0.5s ease-in-out;
+            }
+            @keyframes fadeIn {
+                from { opacity: 0; }
+                to { opacity: 1; }
+            }
+            .slide-up {
+                animation: slideUp 0.6s ease-out;
+            }
+            @keyframes slideUp {
+                from { transform: translateY(20px); opacity: 0; }
+                to { transform: translateY(0); opacity: 1; }
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <!-- 页面头部 -->
+    <header class="bg-white shadow-sm py-4 px-6 md:px-12">
+        <div class="max-w-7xl mx-auto flex justify-between items-center">
+            <h1 class="text-xl font-bold text-gray-500 flex items-center">
+                <i class="fa fa-bar-chart text-accent mr-2"></i>
+                学习分析报告
+            </h1>
+            <button id="back-to-home" class="btn-primary flex items-center">
+                <i class="fa fa-arrow-left mr-2"></i> 返回首页
+            </button>
+        </div>
+    </header>
+    
+    <!-- 主要内容 -->
+    <main class="max-w-7xl mx-auto px-6 md:px-12 py-8">
+        <!-- 加载指示器 -->
+        <div id="loading-indicator" class="flex justify-center items-center py-20">
+            <div class="text-center">
+                <div class="inline-block w-12 h-12 border-4 border-gray-200 border-t-accent rounded-full animate-spin mb-4"></div>
+                <p class="text-gray-400">正在加载分析报告...</p>
+            </div>
+        </div>
+        
+        <!-- 错误提示 -->
+        <div id="error-message" class="hidden py-20 text-center">
+            <i class="fa fa-exclamation-circle text-danger text-5xl mb-4"></i>
+            <p class="text-gray-500">无法加载分析报告</p>
+            <p id="error-details" class="text-gray-300 mt-2"></p>
+            <button id="retry-loading" class="btn-primary mt-4">重试</button>
+        </div>
+        
+        <!-- 内容容器 -->
+        <div id="content-container" class="hidden">
+            <!-- 报告标题信息 -->
+            <div class="card mb-8 slide-up" style="animation-delay: 0.1s">
+                <div class="p-6 md:p-8">
+                    <div class="flex flex-col md:flex-row md:items-center justify-between">
+                        <div>
+                            <h2 id="analysis-title" class="text-2xl font-bold text-gray-500 mb-2"></h2>
+                            <div class="flex flex-wrap items-center text-gray-300 text-sm gap-x-6 gap-y-2">
+                                <div class="flex items-center">
+                                    <i class="fa fa-calendar-o mr-2"></i>
+                                    <span id="analysis-date"></span>
+                                </div>
+                                <div class="flex items-center">
+                                    <i class="fa fa-file-text-o mr-2"></i>
+                                    <span id="analysis-exam"></span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mt-4 md:mt-0">
+                            <button id="download-report" class="btn-primary flex items-center">
+                                <i class="fa fa-download mr-2"></i> 下载报告
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 总体评价 -->
+            <div class="card mb-8 slide-up" style="animation-delay: 0.2s">
+                <div class="p-6 border-b border-gray-100">
+                    <h2 class="section-title">
+                        <i class="fa fa-comment-o"></i> 总体评价
+                    </h2>
+                </div>
+                <div class="p-6">
+                    <div id="overall-evaluation" class="text-gray-500 leading-relaxed">
+                        <!-- 由JavaScript动态填充 -->
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 成绩概览 -->
+            <div class="card mb-8 slide-up" style="animation-delay: 0.3s">
+                <div class="p-6 border-b border-gray-100">
+                    <h2 class="section-title">
+                        <i class="fa fa-pie-chart"></i> 成绩概览
+                    </h2>
+                </div>
+                <div class="p-6">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                        <div class="bg-gray-50 p-4 rounded-lg">
+                            <p class="text-gray-300 text-sm">总分</p>
+                            <p id="total-score" class="text-2xl font-bold text-gray-500 mt-1"></p>
+                        </div>
+                        <div class="bg-gray-50 p-4 rounded-lg">
+                            <p class="text-gray-300 text-sm">平均分</p>
+                            <p id="avg-score" class="text-2xl font-bold text-gray-500 mt-1"></p>
+                        </div>
+                        <div class="bg-gray-50 p-4 rounded-lg">
+                            <p class="text-gray-300 text-sm">最高分科目</p>
+                            <p id="highest-subject" class="text-2xl font-bold text-gray-500 mt-1"></p>
+                            <p id="highest-score" class="text-gray-400 text-sm"></p>
+                        </div>
+                    </div>
+                    
+                    <div class="h-[300px]">
+                        <canvas id="scores-overview-chart"></canvas>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 成绩趋势 -->
+            <div class="card mb-8 slide-up" style="animation-delay: 0.4s">
+                <div class="p-6 border-b border-gray-100">
+                    <h2 class="section-title">
+                        <i class="fa fa-line-chart"></i> 成绩趋势分析
+                    </h2>
+                </div>
+                <div class="p-6">
+                    <div class="h-[300px]">
+                        <canvas id="score-trend-chart"></canvas>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 学科分析 -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+                <!-- 优势学科 -->
+                <div class="card slide-up" style="animation-delay: 0.5s">
+                    <div class="p-6 border-b border-gray-100">
+                        <h2 class="section-title">
+                            <i class="fa fa-trophy"></i> 优势学科
+                        </h2>
+                    </div>
+                    <div class="p-6">
+                        <div id="strengths-subjects" class="space-y-4">
+                            <!-- 由JavaScript动态填充 -->
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 薄弱学科 -->
+                <div class="card slide-up" style="animation-delay: 0.6s">
+                    <div class="p-6 border-b border-gray-100">
+                        <h2 class="section-title">
+                            <i class="fa fa-exclamation-triangle"></i> 薄弱学科
+                        </h2>
+                    </div>
+                    <div class="p-6">
+                        <div id="weaknesses-subjects" class="space-y-4">
+                            <!-- 由JavaScript动态填充 -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 错题分析 -->
+            <div class="card mb-8 slide-up" style="animation-delay: 0.7s">
+                <div class="p-6 border-b border-gray-100">
+                    <h2 class="section-title">
+                        <i class="fa fa-pencil-square-o"></i> 错题分析
+                    </h2>
+                </div>
+                <div class="p-6">
+                    <div id="mistakes-analysis" class="space-y-4">
+                        <!-- 由JavaScript动态填充 -->
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 提升建议 -->
+            <div class="card slide-up" style="animation-delay: 0.8s">
+                <div class="p-6 border-b border-gray-100">
+                    <h2 class="section-title">
+                        <i class="fa fa-lightbulb-o"></i> 提升建议
+                    </h2>
+                </div>
+                <div class="p-6">
+                    <div id="improvement-suggestions" class="space-y-6">
+                        <!-- 由JavaScript动态填充 -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+    
+    <!-- 页脚 -->
+    <footer class="bg-white border-t border-gray-100 py-6 mt-12">
+        <div class="max-w-7xl mx-auto px-6 md:px-12 text-center text-gray-300 text-sm">
+            <p>学习分析工具 &copy; 2025</p>
+        </div>
+    </footer>
+    
+    <script src="js/view-analysis.js"></script>
+</body>
+</html>
+    

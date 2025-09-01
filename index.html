@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>学习分析工具</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"></script>
+    
+    <!-- Tailwind 配置 -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#165DFF',
+                        secondary: '#36CFBF',
+                        accent: '#722ED1',
+                        warning: '#FF7D00',
+                        success: '#00B42A',
+                        danger: '#F53F3F',
+                        gray: {
+                            50: '#F2F3F5',
+                            100: '#E5E6EB',
+                            200: '#C9CDD4',
+                            300: '#86909C',
+                            400: '#4E5969',
+                            500: '#1D2129',
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                    boxShadow: {
+                        'card': '0 4px 12px rgba(0, 0, 0, 0.05)',
+                        'hover': '0 8px 24px rgba(0, 0, 0, 0.1)',
+                    }
+                },
+            }
+        }
+    </script>
+    
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .btn-primary {
+                @apply bg-primary text-white px-6 py-3 rounded-xl font-medium transition-all duration-300 hover:bg-primary/90 hover:shadow-lg transform hover:-translate-y-0.5;
+            }
+            .btn-secondary {
+                @apply bg-white border border-gray-200 text-gray-500 px-6 py-3 rounded-xl font-medium transition-all duration-300 hover:border-primary hover:text-primary hover:shadow-md;
+            }
+            .card {
+                @apply bg-white rounded-xl shadow-card overflow-hidden transition-all duration-300 hover:shadow-hover;
+            }
+            .section-title {
+                @apply text-lg font-semibold text-gray-500 mb-4 flex items-center;
+            }
+            .section-title i {
+                @apply mr-2 text-primary;
+            }
+            .fade-in {
+                animation: fadeIn 0.5s ease-in-out;
+            }
+            @keyframes fadeIn {
+                from { opacity: 0; }
+                to { opacity: 1; }
+            }
+            .slide-up {
+                animation: slideUp 0.5s ease-out;
+            }
+            @keyframes slideUp {
+                from { transform: translateY(20px); opacity: 0; }
+                to { transform: translateY(0); opacity: 1; }
+            }
+            .pulse {
+                animation: pulse 1.5s infinite;
+            }
+            @keyframes pulse {
+                0% { transform: scale(1); }
+                50% { transform: scale(1.05); }
+                100% { transform: scale(1); }
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <!-- 页面头部 -->
+    <header class="bg-white shadow-sm py-4 px-6 md:px-12">
+        <div class="max-w-7xl mx-auto">
+            <h1 class="text-2xl font-bold text-gray-500 flex items-center">
+                <i class="fa fa-graduation-cap text-primary mr-3"></i>
+                学习分析工具
+            </h1>
+        </div>
+    </header>
+    
+    <!-- 主要内容 -->
+    <main class="max-w-7xl mx-auto px-6 md:px-12 py-8">
+        <!-- 功能按钮区域 -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
+            <!-- 上传错题按钮 -->
+            <div class="card cursor-pointer overflow-hidden group" id="upload-mistake-card">
+                <div class="p-8 flex flex-col h-full">
+                    <div class="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center text-primary text-2xl mb-6 group-hover:bg-primary group-hover:text-white transition-colors duration-300">
+                        <i class="fa fa-upload"></i>
+                    </div>
+                    <h2 class="text-xl font-bold text-gray-500 mb-3">上传错题</h2>
+                    <p class="text-gray-300 mb-6 flex-grow">上传试卷、练习中的错题图片或PDF，系统将自动识别内容并保存到错题本</p>
+                    <div class="text-primary font-medium flex items-center group-hover:translate-x-2 transition-transform duration-300">
+                        <span>开始上传</span>
+                        <i class="fa fa-arrow-right ml-2"></i>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 成绩分析按钮 -->
+            <div class="card cursor-pointer overflow-hidden group" id="analyze-scores-card">
+                <div class="p-8 flex flex-col h-full">
+                    <div class="w-16 h-16 bg-accent/10 rounded-full flex items-center justify-center text-accent text-2xl mb-6 group-hover:bg-accent group-hover:text-white transition-colors duration-300">
+                        <i class="fa fa-bar-chart"></i>
+                    </div>
+                    <h2 class="text-xl font-bold text-gray-500 mb-3">成绩分析</h2>
+                    <p class="text-gray-300 mb-6 flex-grow">基于考试成绩和错题记录，生成多维度学习分析报告，提供个性化提升建议</p>
+                    <div class="text-accent font-medium flex items-center group-hover:translate-x-2 transition-transform duration-300">
+                        <span>开始分析</span>
+                        <i class="fa fa-arrow-right ml-2"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 历史数据区域 -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <!-- 历史错题清单 -->
+            <div class="card">
+                <div class="p-6 border-b border-gray-100">
+                    <h2 class="section-title">
+                        <i class="fa fa-list-alt"></i> 历史错题清单
+                    </h2>
+                </div>
+                <div class="p-6">
+                    <div id="mistakes-loading" class="flex justify-center items-center py-12">
+                        <div class="text-center">
+                            <div class="inline-block w-8 h-8 border-4 border-gray-200 border-t-primary rounded-full animate-spin mb-2"></div>
+                            <p class="text-gray-300 text-sm">加载错题数据中...</p>
+                        </div>
+                    </div>
+                    
+                    <div id="no-mistakes" class="hidden py-12 text-center">
+                        <i class="fa fa-file-o text-gray-100 text-5xl mb-4"></i>
+                        <p class="text-gray-300">暂无错题记录</p>
+                        <p class="text-gray-200 text-sm mt-2">点击"上传错题"按钮添加第一条错题记录</p>
+                    </div>
+                    
+                    <div id="mistakes-table-container" class="hidden">
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full">
+                                <thead>
+                                    <tr class="border-b border-gray-100">
+                                        <th class="py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">科目</th>
+                                        <th class="py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">年级</th>
+                                        <th class="py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">考试类型</th>
+                                        <th class="py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">文件名称</th>
+                                        <th class="py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">日期</th>
+                                        <th class="py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="mistakes-table-body" class="divide-y divide-gray-50">
+                                    <!-- 由JavaScript动态填充 -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 历史分析结果 -->
+            <div class="card">
+                <div class="p-6 border-b border-gray-100">
+                    <h2 class="section-title">
+                        <i class="fa fa-line-chart"></i> 历史分析结果
+                    </h2>
+                </div>
+                <div class="p-6">
+                    <div id="analyses-loading" class="flex justify-center items-center py-12">
+                        <div class="text-center">
+                            <div class="inline-block w-8 h-8 border-4 border-gray-200 border-t-accent rounded-full animate-spin mb-2"></div>
+                            <p class="text-gray-300 text-sm">加载分析数据中...</p>
+                        </div>
+                    </div>
+                    
+                    <div id="no-analyses" class="hidden py-12 text-center">
+                        <i class="fa fa-bar-chart text-gray-100 text-5xl mb-4"></i>
+                        <p class="text-gray-300">暂无分析记录</p>
+                        <p class="text-gray-200 text-sm mt-2">点击"成绩分析"按钮生成第一条分析报告</p>
+                    </div>
+                    
+                    <div id="analyses-table-container" class="hidden">
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full">
+                                <thead>
+                                    <tr class="border-b border-gray-100">
+                                        <th class="py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">标题</th>
+                                        <th class="py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">考试类型</th>
+                                        <th class="py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">日期</th>
+                                        <th class="py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="analyses-table-body" class="divide-y divide-gray-50">
+                                    <!-- 由JavaScript动态填充 -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+    
+    <!-- 页脚 -->
+    <footer class="bg-white border-t border-gray-100 py-6 mt-12">
+        <div class="max-w-7xl mx-auto px-6 md:px-12 text-center text-gray-300 text-sm">
+            <p>学习分析工具 &copy; 2025</p>
+        </div>
+    </footer>
+    
+    <!-- 上传错题弹窗 -->
+    <div id="upload-mistake-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden fade-in">
+        <div class="bg-white rounded-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto slide-up">
+            <div class="p-6 border-b border-gray-100 flex justify-between items-center sticky top-0 bg-white z-10">
+                <h3 class="text-xl font-bold text-gray-500">上传错题</h3>
+                <button id="close-upload-modal" class="text-gray-300 hover:text-gray-500">
+                    <i class="fa fa-times text-xl"></i>
+                </button>
+            </div>
+            
+            <div class="p-6">
+                <!-- 文件上传区域 -->
+                <div id="file-upload-area" class="border-2 border-dashed border-gray-200 rounded-lg p-8 text-center mb-6 cursor-pointer hover:border-primary transition-colors duration-300">
+                    <input type="file" id="mistake-file-input" class="hidden" accept="image/png, image/jpeg, application/pdf" />
+                    <i class="fa fa-cloud-upload text-4xl text-gray-200 mb-4"></i>
+                    <p class="text-gray-500 font-medium mb-2">拖放文件到此处，或点击上传</p>
+                    <p class="text-gray-300 text-sm">支持 PNG、JPG、JPEG 图片和 PDF 文件</p>
+                </div>
+                
+                <!-- 上传进度 -->
+                <div id="upload-progress" class="hidden mb-6">
+                    <div class="flex justify-between text-sm mb-1">
+                        <span id="upload-filename" class="text-gray-400"></span>
+                        <span id="upload-percentage" class="text-primary font-medium">0%</span>
+                    </div>
+                    <div class="w-full bg-gray-100 rounded-full h-2">
+                        <div id="upload-progress-bar" class="bg-primary h-2 rounded-full" style="width: 0%"></div>
+                    </div>
+                </div>
+                
+                <!-- 识别中状态 -->
+                <div id="ocr-processing" class="hidden mb-6 text-center py-6">
+                    <div class="inline-block w-10 h-10 border-4 border-gray-200 border-t-primary rounded-full animate-spin mb-4"></div>
+                    <p class="text-gray-400">正在识别文件内容，请稍候...</p>
+                </div>
+                
+                <!-- 表单内容 -->
+                <form id="mistake-form">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <div>
+                            <label for="mistake-grade" class="block text-sm font-medium text-gray-400 mb-1">年级 <span class="text-danger">*</span></label>
+                            <select id="mistake-grade" name="grade" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary" required>
+                                <option value="">请选择年级</option>
+                                <!-- 由JavaScript动态填充 -->
+                            </select>
+                        </div>
+                        
+                        <div>
+                            <label for="mistake-exam-type" class="block text-sm font-medium text-gray-400 mb-1">考试类型 <span class="text-danger">*</span></label>
+                            <select id="mistake-exam-type" name="examType" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary" required>
+                                <option value="">请选择考试类型</option>
+                                <!-- 由JavaScript动态填充 -->
+                            </select>
+                        </div>
+                        
+                        <div>
+                            <label for="mistake-subject" class="block text-sm font-medium text-gray-400 mb-1">科目 <span class="text-danger">*</span></label>
+                            <select id="mistake-subject" name="subject" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary" required>
+                                <option value="">请选择科目</option>
+                                <!-- 由JavaScript动态填充 -->
+                            </select>
+                        </div>
+                        
+                        <div>
+                            <label for="mistake-reason" class="block text-sm font-medium text-gray-400 mb-1">收录原因</label>
+                            <input type="text" id="mistake-reason" name="reason" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary" placeholder="例如：知识点薄弱、粗心大意等">
+                        </div>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <label for="recognized-content" class="block text-sm font-medium text-gray-400 mb-1">识别内容</label>
+                        <textarea id="recognized-content" name="content" rows="6" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary bg-gray-50" placeholder="文件内容将在这里显示..." readonly></textarea>
+                    </div>
+                    
+                    <div class="mb-6">
+                        <label for="mistake-notes" class="block text-sm font-medium text-gray-400 mb-1">备注</label>
+                        <textarea id="mistake-notes" name="notes" rows="3" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary" placeholder="添加备注信息（可选）"></textarea>
+                    </div>
+                    
+                    <div class="flex justify-end space-x-3">
+                        <button type="button" id="cancel-upload" class="btn-secondary">取消</button>
+                        <button type="submit" id="save-mistake" class="btn-primary" disabled>保存错题</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 成绩分析弹窗 -->
+    <div id="analyze-scores-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden fade-in">
+        <div class="bg-white rounded-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto slide-up">
+            <div class="p-6 border-b border-gray-100 flex justify-between items-center sticky top-0 bg-white z-10">
+                <h3 class="text-xl font-bold text-gray-500">成绩分析</h3>
+                <button id="close-analyze-modal" class="text-gray-300 hover:text-gray-500">
+                    <i class="fa fa-times text-xl"></i>
+                </button>
+            </div>
+            
+            <div class="p-6">
+                <div id="exams-loading" class="flex justify-center items-center py-6">
+                    <div class="text-center">
+                        <div class="inline-block w-8 h-8 border-4 border-gray-200 border-t-accent rounded-full animate-spin mb-2"></div>
+                        <p class="text-gray-300 text-sm">加载考试数据中...</p>
+                    </div>
+                </div>
+                
+                <div id="no-exams" class="hidden py-12 text-center">
+                    <i class="fa fa-calendar text-gray-100 text-5xl mb-4"></i>
+                    <p class="text-gray-300">暂无考试记录</p>
+                    <p class="text-gray-200 text-sm mt-2">请先添加考试成绩数据</p>
+                </div>
+                
+                <div id="analyze-form-container" class="hidden">
+                    <form id="analyze-form">
+                        <div class="mb-4">
+                            <label for="analysis-exam" class="block text-sm font-medium text-gray-400 mb-1">选择考试 <span class="text-danger">*</span></label>
+                            <select id="analysis-exam" name="examId" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent" required>
+                                <option value="">请选择要分析的考试</option>
+                                <!-- 由JavaScript动态填充 -->
+                            </select>
+                        </div>
+                        
+                        <div class="mb-6">
+                            <label for="analysis-title" class="block text-sm font-medium text-gray-400 mb-1">分析报告标题 <span class="text-danger">*</span></label>
+                            <input type="text" id="analysis-title" name="title" class="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent" placeholder="例如：初三上学期期末考试分析" required>
+                        </div>
+                        
+                        <div class="p-4 bg-accent/5 rounded-lg mb-6">
+                            <div class="flex items-start">
+                                <i class="fa fa-info-circle text-accent mt-0.5 mr-3"></i>
+                                <div>
+                                    <p class="text-sm text-gray-400">分析将基于所选考试的成绩数据和相关错题记录，生成包含以下内容的报告：</p>
+                                    <ul class="text-sm text-gray-400 mt-1 list-disc pl-5 space-y-1">
+                                        <li>总体学习表现评价</li>
+                                        <li>各学科优势与薄弱环节分析</li>
+                                        <li>错题集中知识点及改进建议</li>
+                                        <li>个性化学习提升计划</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div id="analysis-processing" class="hidden text-center py-6 mb-6">
+                            <div class="inline-block w-10 h-10 border-4 border-gray-200 border-t-accent rounded-full animate-spin mb-4"></div>
+                            <p class="text-gray-400">正在生成分析报告，请稍候...</p>
+                            <p class="text-gray-300 text-sm mt-2">此过程可能需要30秒到1分钟</p>
+                        </div>
+                        
+                        <div class="flex justify-end space-x-3">
+                            <button type="button" id="cancel-analysis" class="btn-secondary">取消</button>
+                            <button type="submit" id="generate-analysis" class="btn-primary bg-accent hover:bg-accent/90">生成分析报告</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 成功提示弹窗 -->
+    <div id="success-toast" class="fixed bottom-6 right-6 bg-success text-white px-6 py-3 rounded-lg shadow-lg transform translate-y-20 opacity-0 transition-all duration-300 flex items-center z-50">
+        <i class="fa fa-check-circle mr-2"></i>
+        <span id="success-message"></span>
+    </div>
+    
+    <script src="js/index.js"></script>
+</body>
+</html>
+    

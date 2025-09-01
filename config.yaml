@@ -1,0 +1,18 @@
+# API配置文件
+# 此文件不会被部署，仅作为本地参考，实际密钥需在Cloudflare控制台配置
+
+# DeepSeek API配置
+deepseek:
+  api_key: "your_deepseek_api_key_here"
+  api_url: "https://api.deepseek.com/v1/chat/completions"
+
+# OCR API配置（推荐使用ocr.space）
+ocr:
+  api_key: "your_ocr_api_key_here"
+  api_url: "https://api.ocr.space/parse/image"
+
+# 其他配置
+app:
+  name: "学习分析工具"
+  version: "1.0.0"
+  debug: false
