@@ -2,6 +2,7 @@
 let configData = null;
 let mistakesList = [];
 let analysesList = [];
+const mistakeFileInput = document.getElementById('mistake-file-input');
 
 // DOM元素
 const uploadMistakeBtn = document.getElementById('upload-mistake-btn');
@@ -212,7 +213,7 @@ async function loadAnalysesList() {
 // 初始化表单
 function initForms() {
     // 上传文件预览
-    fileInput.addEventListener('change', handleFilePreview);
+    mistakeFileInput.addEventListener('change', handleFileSelect);
     
     // 上传按钮点击事件
     uploadMistakeBtn.addEventListener('click', () => {
@@ -222,7 +223,11 @@ function initForms() {
             uploadModal.classList.add('modal-visible');
         }, 10);
     });
-    
+    // 绑定文件上传区域点击事件（触发文件选择）
+    document.getElementById('file-upload-area').addEventListener('click', () => {
+        mistakeFileInput.click();
+    });
+      
     // 分析按钮点击事件
     analyzeScoreBtn.addEventListener('click', () => {
         analyzeModal.classList.remove('hidden');
@@ -260,6 +265,42 @@ function initForms() {
     });
 }
 
+// 处理文件选择
+function handleFileSelect(e) {
+    const file = e.target.files[0];
+    if (!file) {
+        filePreview.innerHTML = '';
+        return;
+    }
+
+    // 验证文件类型
+    const allowedTypes = [
+        'image/jpeg', 'image/png', 'image/jpg',
+        'application/pdf'
+    ];
+
+    if (!allowedTypes.includes(file.type)) {
+        showNotification('不支持的文件类型，仅支持JPG、PNG、PDF格式', 'error');
+        mistakeFileInput.value = '';
+        return;
+    }
+
+    // 验证文件大小（不超过10MB）
+    if (file.size > 10 * 1024 * 1024) {
+        showNotification('文件过大，最大支持10MB', 'error');
+        mistakeFileInput.value = '';
+        return;
+    }
+
+    // 显示文件名和上传进度
+    document.getElementById('upload-filename').textContent = file.name;
+    document.getElementById('upload-progress').classList.remove('hidden');
+    document.getElementById('file-upload-area').classList.add('hidden');
+
+    // 调用后端OCR接口（由worker.js处理实际识别逻辑）
+    uploadAndRecognizeFile(file);
+}
+
 // 处理文件预览
 function handleFilePreview(e) {
     const file = e.target.files[0];
@@ -267,56 +308,149 @@ function handleFilePreview(e) {
         filePreview.innerHTML = '';
         return;
     }
-    
+
     // 验证文件类型
     const allowedTypes = [
         'image/jpeg', 'image/png', 'image/jpg',
         'application/pdf'
     ];
-    
+
     if (!allowedTypes.includes(file.type)) {
         showNotification('不支持的文件类型，仅支持JPG、PNG、PDF格式', 'error');
         fileInput.value = '';
         filePreview.innerHTML = '';
         return;
     }
-    
-    // 验证文件大小
+
+    // 验证文件大小（补充完整之前的代码）
     if (file.size > 10 * 1024 * 1024) {
         showNotification('文件过大，最大支持10MB', 'error');
         fileInput.value = '';
         filePreview.innerHTML = '';
         return;
     }
-    
-    // 显示文件预览
-    if (file.type.startsWith('image/')) {
-        const reader = new FileReader();
-        reader.onload = (event) => {
-            filePreview.innerHTML = `
-                <div class="mt-3">
-                    <img src="${event.target.result}" alt="预览图" class="max-w-full max-h-[300px] object-contain rounded-md border border-gray-100">
-                    <p class="text-sm text-gray-400 mt-2">${file.name} (${(file.size / 1024).toFixed(1)} KB)</p>
-                </div>
-            `;
-        };
-        reader.readAsDataURL(file);
-    } else if (file.type === 'application/pdf') {
-        filePreview.innerHTML = `
-            <div class="mt-3 flex items-center p-4 border border-gray-100 rounded-md bg-gray-50">
-                <i class="fa fa-file-pdf-o text-red-500 text-2xl mr-3"></i>
-                <div>
-                    <p class="font-medium">${file.name}</p>
-                    <p class="text-sm text-gray-400">${(file.size / 1024).toFixed(1)} KB · PDF文件</p>
-                </div>
-            </div>
-        `;
+
+    // 显示文件名
+    document.getElementById('upload-filename').textContent = file.name;
+    document.getElementById('upload-progress').classList.remove('hidden');
+
+    // 模拟上传进度（实际项目中可根据真实进度更新）
+    let progress = 0;
+    const progressInterval = setInterval(() => {
+        progress += 10;
+        document.getElementById('upload-progress-bar').style.width = `${progress}%`;
+        document.getElementById('upload-percentage').textContent = `${progress}%`;
+        
+        if (progress >= 100) {
+            clearInterval(progressInterval);
+            // 上传完成后调用OCR识别
+            handleOcrRecognition(file);
+        }
+    }, 300);
+}
+
+// 处理OCR识别
+async function handleOcrRecognition(file) {
+    try {
+        // 显示识别中状态
+        document.getElementById('file-upload-area').classList.add('hidden');
+        document.getElementById('ocr-processing').classList.remove('hidden');
+        document.getElementById('upload-progress').classList.add('hidden');
+
+        // 构建FormData（ocr.space API要求multipart/form-data格式）
+        const formData = new FormData();
+        formData.append('image', file);
+        formData.append('apikey', configData.ocr.api_key); // 从configData获取API密钥
+        formData.append('language', 'chs'); // 中文识别
+        formData.append('isOverlayRequired', 'false');
+
+        // 调用ocr.space API
+        const response = await fetch(configData.ocr.api_url, {
+            method: 'POST',
+            body: formData,
+            timeout: API_CONFIG.timeout
+        });
+
+        const result = await response.json();
+
+        // 处理识别结果
+        if (result.IsErroredOnProcessing) {
+            throw new Error(`识别失败: ${result.ErrorDetails}`);
+        }
+
+        // 提取识别文本（取第一个结果）
+        const ocrText = result.ParsedResults?.[0]?.ParsedText || '';
+        
+        // 填充识别内容到表单
+        document.getElementById('recognized-content').value = ocrText;
+
+        // 隐藏识别中状态，显示表单内容
+        document.getElementById('ocr-processing').classList.add('hidden');
+        document.getElementById('mistake-form').classList.remove('hidden');
+
+    } catch (error) {
+        console.error('OCR识别失败:', error);
+        showNotification(`识别失败: ${error.message}`, 'error');
+        // 恢复上传区域显示
+        document.getElementById('file-upload-area').classList.remove('hidden');
+        document.getElementById('ocr-processing').classList.add('hidden');
     }
-    
-    // 自动上传并识别
-    setTimeout(() => {
-        uploadFileAndRecognize(file);
-    }, 500);
+}
+
+// 上传文件并调用后端OCR接口
+async function uploadAndRecognizeFile(file) {
+    try {
+        // 构建FormData
+        const formData = new FormData();
+        formData.append('file', file);
+
+        // 显示上传进度（模拟，实际可通过XMLHttpRequest监听进度）
+        let progress = 0;
+        const progressInterval = setInterval(() => {
+            progress = Math.min(progress + 10, 90); // 预留10%给后端处理
+            document.getElementById('upload-progress-bar').style.width = `${progress}%`;
+            document.getElementById('upload-percentage').textContent = `${progress}%`;
+        }, 300);
+
+        // 调用后端OCR接口（worker.js提供的端点）
+        const response = await apiRequest('/ocr/recognize', 'POST', formData, {
+            // 覆盖默认Content-Type，让浏览器自动设置multipart/form-data边界
+            headers: {}
+        });
+
+        clearInterval(progressInterval);
+        // 进度设为100%
+        document.getElementById('upload-progress-bar').style.width = '100%';
+        document.getElementById('upload-percentage').textContent = '100%';
+
+        // 隐藏上传进度，显示识别中状态
+        setTimeout(() => {
+            document.getElementById('upload-progress').classList.add('hidden');
+            document.getElementById('ocr-processing').classList.remove('hidden');
+        }, 500);
+
+        // 后端返回识别结果后处理
+        if (response.success && response.content) {
+            // 隐藏识别中状态，显示表单
+            document.getElementById('ocr-processing').classList.add('hidden');
+            document.getElementById('mistake-form').classList.remove('hidden');
+            // 填充识别内容
+            document.getElementById('recognized-content').value = response.content;
+            // 启用保存按钮
+            document.getElementById('save-mistake').removeAttribute('disabled');
+        } else {
+            throw new Error(response.message || '识别失败，未返回有效内容');
+        }
+
+    } catch (error) {
+        console.error('OCR处理失败:', error);
+        showNotification(`处理失败: ${error.message}`, 'error');
+        // 恢复上传区域
+        document.getElementById('file-upload-area').classList.remove('hidden');
+        document.getElementById('upload-progress').classList.add('hidden');
+        document.getElementById('ocr-processing').classList.add('hidden');
+        mistakeFileInput.value = '';
+    }
 }
 
 // 上传文件并识别内容
@@ -527,3 +661,38 @@ function closeAnalyzeModalFunc() {
     }, 300);
 }
     
+// 补充apiRequest支持FormData（修改config.js中的apiRequest，此处为适配逻辑）
+// 注：实际应在config.js中扩展apiRequest函数，支持自定义headers和FormData
+async function apiRequest(endpoint, method = 'GET', data = null, options = {}) {
+    const url = `${API_CONFIG.baseUrl}${endpoint}`;
+    const fetchOptions = {
+        method,
+        ...options,
+        headers: {
+            ...(options.headers || {}),
+            // 若为FormData，不手动设置Content-Type
+            ...(!(data instanceof FormData) && { 'Content-Type': 'application/json' })
+        },
+        timeout: API_CONFIG.timeout
+    };
+
+    if (data && !(data instanceof FormData)) {
+        fetchOptions.body = JSON.stringify(data);
+    } else if (data instanceof FormData) {
+        fetchOptions.body = data;
+    }
+
+    try {
+        const response = await fetch(url, fetchOptions);
+        const result = await response.json();
+
+        if (!response.ok) {
+            throw new Error(result.message || `请求失败: ${response.statusText}`);
+        }
+
+        return result;
+    } catch (error) {
+        console.error(`请求${url}失败:`, error);
+        throw error;
+    }
+}
