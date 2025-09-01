@@ -1,20 +1,16 @@
 // 全局变量
-const API_BASE_URL = 'https://api.mistakes.huigg.xyz/api';
 let mistakeId = null;
 
 // DOM 元素
 const backToHome = document.getElementById('back-to-home');
 const loadingIndicator = document.getElementById('loading-indicator');
 const errorMessage = document.getElementById('error-message');
-const errorDetails = document.getElementById('error-details');
-const retryLoading = document.getElementById('retry-loading');
 const contentContainer = document.getElementById('content-container');
 const mistakeTitle = document.getElementById('mistake-title');
 const mistakeGrade = document.getElementById('mistake-grade');
 const mistakeExam = document.getElementById('mistake-exam');
 const mistakeReason = document.getElementById('mistake-reason');
 const mistakeNotes = document.getElementById('mistake-notes');
-const mistakeCreatedAt = document.getElementById('mistake-created-at');
 const mistakeViewer = document.getElementById('mistake-viewer');
 const recognizedContent = document.getElementById('recognized-content');
 
@@ -35,10 +31,8 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // 绑定事件监听器
     backToHome.addEventListener('click', () => {
-        window.location.href = 'index.html';
+        window.location.href = 'https://mistakesanalysis.huigg.xyz/';
     });
-    
-    retryLoading.addEventListener('click', loadMistakeDetails);
     
     // 加载错题详情
     loadMistakeDetails();
@@ -52,30 +46,63 @@ async function loadMistakeDetails() {
         errorMessage.classList.add('hidden');
         contentContainer.classList.add('hidden');
         
-        // 获取错题信息
-        const response = await fetch(`${API_BASE_URL}/mistakes/${mistakeId}`);
-        
-        if (!response.ok) {
-            throw new Error('获取错题信息失败');
-        }
-        
-        const mistake = await response.json();
+        // 获取错题数据
+        const mistake = await apiRequest(`/mistakes/${mistakeId}`);
         
         if (!mistake) {
             throw new Error('未找到该错题');
         }
         
-        // 填充页面内容
-        mistakeTitle.textContent = `${mistake.subjectName} - ${mistake.fileName}`;
-        mistakeGrade.textContent = mistake.grade;
-        mistakeExam.textContent = mistake.examType;
-        mistakeReason.textContent = mistake.reason || '无';
-        mistakeNotes.textContent = mistake.notes || '无';
-        mistakeCreatedAt.textContent = formatDate(mistake.createdAt);
-        recognizedContent.textContent = mistake.content || '无识别内容';
+        // 填充基本信息
+        mistakeTitle.textContent = mistake.fileName || '错题详情';
+        mistakeGrade.textContent = mistake.grade || '未知';
+        mistakeExam.textContent = mistake.examType || '未知';
+        mistakeReason.textContent = mistake.reason || '未填写';
+        mistakeNotes.textContent = mistake.notes || '无备注信息';
         
-        // 加载错题文件
-        loadMistakeFile(mistake.fileId, mistake.fileName);
+        // 显示文件内容
+        if (mistake.fileUrl) {
+            if (mistake.fileType.startsWith('image/')) {
+                mistakeViewer.innerHTML = `
+                    <img src="${mistake.fileUrl}" 
+                         alt="${mistake.fileName}" 
+                         class="max-w-full max-h-[600px] object-contain rounded-lg shadow-sm">
+                `;
+            } else if (mistake.fileType === 'application/pdf') {
+                mistakeViewer.innerHTML = `
+                    <div class="w-full">
+                        <embed src="${mistake.fileUrl}" 
+                               type="application/pdf" 
+                               width="100%" 
+                               height="600px" 
+                               class="rounded-lg shadow-sm">
+                        <p class="text-center text-sm text-gray-400 mt-2">
+                            如无法预览，请<a href="${mistake.fileUrl}" target="_blank" class="text-primary">点击下载</a>
+                        </p>
+                    </div>
+                `;
+            } else {
+                mistakeViewer.innerHTML = `
+                    <div class="text-center py-8">
+                        <i class="fa fa-file-o text-4xl text-gray-300 mb-3"></i>
+                        <p class="text-gray-500">${mistake.fileName}</p>
+                        <a href="${mistake.fileUrl}" target="_blank" class="text-primary mt-2 inline-block">
+                            <i class="fa fa-download mr-1"></i> 下载文件
+                        </a>
+                    </div>
+                `;
+            }
+        } else {
+            mistakeViewer.innerHTML = `
+                <div class="text-center py-8 text-gray-400">
+                    <i class="fa fa-file-o text-4xl mb-3"></i>
+                    <p>未找到相关文件</p>
+                </div>
+            `;
+        }
+        
+        // 显示识别内容
+        recognizedContent.textContent = mistake.content || '无识别内容';
         
         // 显示内容
         loadingIndicator.classList.add('hidden');
@@ -87,77 +114,11 @@ async function loadMistakeDetails() {
     }
 }
 
-// 加载错题文件
-async function loadMistakeFile(fileId, fileName) {
-    try {
-        const response = await fetch(`${API_BASE_URL}/files/${fileId}`);
-        
-        if (!response.ok) {
-            throw new Error('获取文件失败');
-        }
-        
-        const contentType = response.headers.get('content-type');
-        const blob = await response.blob();
-        const url = URL.createObjectURL(blob);
-        
-        // 根据文件类型显示不同的内容
-        if (contentType.startsWith('image/')) {
-            // 图片文件
-            mistakeViewer.innerHTML = `
-                <img src="${url}" alt="${fileName}" class="w-full h-auto rounded-lg shadow-sm" />
-            `;
-        } else if (contentType === 'application/pdf') {
-            // PDF文件
-            mistakeViewer.innerHTML = `
-                <embed src="${url}" type="application/pdf" width="100%" height="500px" class="rounded-lg" />
-                <p class="text-center text-gray-300 text-sm mt-2">如果无法显示，请下载查看</p>
-                <div class="text-center mt-4">
-                    <a href="${url}" download="${fileName}" class="inline-flex items-center text-primary hover:text-primary/80 text-sm">
-                        <i class="fa fa-download mr-1"></i> 下载PDF文件
-                    </a>
-                </div>
-            `;
-        } else {
-            mistakeViewer.innerHTML = `
-                <div class="text-center py-8">
-                    <i class="fa fa-file-o text-gray-200 text-5xl mb-4"></i>
-                    <p class="text-gray-400">不支持的文件类型</p>
-                    <a href="${url}" download="${fileName}" class="inline-flex items-center text-primary hover:text-primary/80 text-sm mt-2">
-                        <i class="fa fa-download mr-1"></i> 下载文件
-                    </a>
-                </div>
-            `;
-        }
-        
-    } catch (error) {
-        console.error('加载错题文件失败:', error);
-        mistakeViewer.innerHTML = `
-            <div class="text-center py-8">
-                <i class="fa fa-exclamation-circle text-danger text-3xl mb-2"></i>
-                <p class="text-gray-400">无法加载文件</p>
-                <p class="text-gray-300 text-sm">${error.message}</p>
-            </div>
-        `;
-    }
-}
-
 // 显示错误信息
 function showError(message) {
     loadingIndicator.classList.add('hidden');
     contentContainer.classList.add('hidden');
     errorMessage.classList.remove('hidden');
-    errorDetails.textContent = message;
-}
-
-// 格式化日期
-function formatDate(dateString) {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('zh-CN', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit'
-    });
+    errorMessage.querySelector('p').textContent = message;
 }
     

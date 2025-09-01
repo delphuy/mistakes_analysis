@@ -1,589 +1,529 @@
 // 全局变量
-const API_BASE_URL = 'https://api.mistakes.huigg.xyz/api';
 let configData = null;
+let mistakesList = [];
+let analysesList = [];
 
-// DOM 元素
-const uploadMistakeCard = document.getElementById('upload-mistake-card');
-const analyzeScoresCard = document.getElementById('analyze-scores-card');
-const uploadMistakeModal = document.getElementById('upload-mistake-modal');
-const analyzeScoresModal = document.getElementById('analyze-scores-modal');
+// DOM元素
+const uploadMistakeBtn = document.getElementById('upload-mistake-btn');
+const analyzeScoreBtn = document.getElementById('analyze-score-btn');
+const uploadModal = document.getElementById('upload-modal');
+const analyzeModal = document.getElementById('analyze-modal');
 const closeUploadModal = document.getElementById('close-upload-modal');
 const closeAnalyzeModal = document.getElementById('close-analyze-modal');
-const cancelUpload = document.getElementById('cancel-upload');
-const cancelAnalysis = document.getElementById('cancel-analysis');
-const fileUploadArea = document.getElementById('file-upload-area');
-const mistakeFileInput = document.getElementById('mistake-file-input');
-const mistakeForm = document.getElementById('mistake-form');
+const mistakesTable = document.getElementById('mistakes-table-body');
+const analysesTable = document.getElementById('analyses-table-body');
+const uploadForm = document.getElementById('upload-form');
 const analyzeForm = document.getElementById('analyze-form');
-const saveMistakeBtn = document.getElementById('save-mistake');
-const generateAnalysisBtn = document.getElementById('generate-analysis');
+const fileInput = document.getElementById('file-input');
+const filePreview = document.getElementById('file-preview');
 const uploadProgress = document.getElementById('upload-progress');
-const uploadFilename = document.getElementById('upload-filename');
-const uploadProgressBar = document.getElementById('upload-progress-bar');
-const uploadPercentage = document.getElementById('upload-percentage');
-const ocrProcessing = document.getElementById('ocr-processing');
-const recognizedContent = document.getElementById('recognized-content');
-const analysisProcessing = document.getElementById('analysis-processing');
-const successToast = document.getElementById('success-toast');
-const successMessage = document.getElementById('success-message');
+const ocrContent = document.getElementById('ocr-content');
+const generateAnalysisBtn = document.getElementById('generate-analysis-btn');
+const analysisProgress = document.getElementById('analysis-progress');
 
-// 页面加载时初始化
-document.addEventListener('DOMContentLoaded', () => {
-    // 加载配置数据
-    loadConfigData();
-    
-    // 加载历史数据
-    loadMistakesHistory();
-    loadAnalysesHistory();
-    
-    // 绑定事件监听器
-    bindEventListeners();
+// 初始化页面
+document.addEventListener('DOMContentLoaded', async () => {
+    try {
+        // 加载配置数据
+        await loadConfigData();
+        
+        // 加载历史错题
+        await loadMistakesList();
+        
+        // 加载历史分析报告
+        await loadAnalysesList();
+        
+        // 初始化表单
+        initForms();
+        
+    } catch (error) {
+        console.error('页面初始化失败:', error);
+        showNotification('页面加载失败，请刷新重试', 'error');
+    }
 });
-
-// 绑定事件监听器
-function bindEventListeners() {
-    // 模态框控制
-    uploadMistakeCard.addEventListener('click', openUploadModal);
-    analyzeScoresCard.addEventListener('click', openAnalyzeModal);
-    closeUploadModal.addEventListener('click', closeUploadModalHandler);
-    closeAnalyzeModal.addEventListener('click', closeAnalyzeModalHandler);
-    cancelUpload.addEventListener('click', closeUploadModalHandler);
-    cancelAnalysis.addEventListener('click', closeAnalyzeModalHandler);
-    
-    // 文件上传区域
-    fileUploadArea.addEventListener('click', () => mistakeFileInput.click());
-    mistakeFileInput.addEventListener('change', handleFileSelection);
-    fileUploadArea.addEventListener('dragover', handleDragOver);
-    fileUploadArea.addEventListener('dragleave', handleDragLeave);
-    fileUploadArea.addEventListener('drop', handleFileDrop);
-    
-    // 表单提交
-    mistakeForm.addEventListener('submit', handleMistakeFormSubmit);
-    analyzeForm.addEventListener('submit', handleAnalyzeFormSubmit);
-}
 
 // 加载配置数据
 async function loadConfigData() {
     try {
-        const response = await fetch(`${API_BASE_URL}/config`);
+        configData = await apiRequest('/config');
         
-        if (!response.ok) {
-            throw new Error('获取配置数据失败');
-        }
+        // 填充年级下拉框
+        const gradeSelect = document.getElementById('grade-select');
+        const examTypeSelect = document.getElementById('exam-type-select');
+        const subjectSelect = document.getElementById('subject-select');
+        const analyzeExamSelect = document.getElementById('analyze-exam-select');
         
-        configData = await response.json();
+        // 填充年级
+        configData.grades.forEach(grade => {
+            const option = document.createElement('option');
+            option.value = grade;
+            option.textContent = grade;
+            gradeSelect.appendChild(option);
+        });
         
-        // 填充下拉选项
-        populateGradeOptions();
-        populateExamTypeOptions();
-        populateSubjectOptions();
+        // 填充考试类型
+        configData.examTypes.forEach(type => {
+            const option = document.createElement('option');
+            option.value = type;
+            option.textContent = type;
+            examTypeSelect.appendChild(option);
+        });
         
-        // 加载考试数据（用于成绩分析）
-        loadExamData();
+        // 填充科目
+        configData.subjects.forEach(subject => {
+            const option = document.createElement('option');
+            option.value = subject.key;
+            option.textContent = subject.name;
+            option.dataset.name = subject.name;
+            subjectSelect.appendChild(option);
+        });
         
-    } catch (error) {
-        console.error('加载配置数据失败:', error);
-        showToast(`加载配置失败: ${error.message}`);
-    }
-}
-
-// 填充年级选项
-function populateGradeOptions() {
-    const gradeSelect = document.getElementById('mistake-grade');
-    if (!gradeSelect || !configData?.grades) return;
-    
-    configData.grades.forEach(grade => {
-        const option = document.createElement('option');
-        option.value = grade;
-        option.textContent = grade;
-        gradeSelect.appendChild(option);
-    });
-}
-
-// 填充考试类型选项
-function populateExamTypeOptions() {
-    const examTypeSelect = document.getElementById('mistake-exam-type');
-    if (!examTypeSelect || !configData?.examTypes) return;
-    
-    configData.examTypes.forEach(type => {
-        const option = document.createElement('option');
-        option.value = type;
-        option.textContent = type;
-        examTypeSelect.appendChild(option);
-    });
-}
-
-// 填充科目选项
-function populateSubjectOptions() {
-    const subjectSelect = document.getElementById('mistake-subject');
-    if (!subjectSelect || !configData?.subjects) return;
-    
-    configData.subjects.forEach(subject => {
-        const option = document.createElement('option');
-        option.value = subject.key;
-        option.textContent = subject.name;
-        option.dataset.name = subject.name; // 存储科目名称用于后续使用
-        subjectSelect.appendChild(option);
-    });
-}
-
-// 加载考试数据
-async function loadExamData() {
-    const examSelect = document.getElementById('analysis-exam');
-    const examsLoading = document.getElementById('exams-loading');
-    const noExams = document.getElementById('no-exams');
-    const analyzeFormContainer = document.getElementById('analyze-form-container');
-    
-    try {
-        const response = await fetch(`${API_BASE_URL}/exams`);
-        
-        if (!response.ok) {
-            throw new Error('获取考试数据失败');
-        }
-        
-        const exams = await response.json();
-        
-        examsLoading.classList.add('hidden');
-        
-        if (exams.length === 0) {
-            noExams.classList.remove('hidden');
-            return;
-        }
-        
-        analyzeFormContainer.classList.remove('hidden');
-        
-        // 填充考试选项
+        // 加载考试列表填充分析表单
+        const exams = await apiRequest('/exams');
         exams.forEach(exam => {
             const option = document.createElement('option');
             option.value = exam.id;
-            option.textContent = `${exam.grade} - ${exam.examType} (${formatDate(exam.date)})`;
-            examSelect.appendChild(option);
+            option.textContent = `${exam.examType} (${formatDate(exam.date)})`;
+            analyzeExamSelect.appendChild(option);
         });
         
     } catch (error) {
-        console.error('加载考试数据失败:', error);
-        examsLoading.classList.add('hidden');
-        noExams.classList.remove('hidden');
-        noExams.innerHTML = `
-            <i class="fa fa-exclamation-circle text-danger text-5xl mb-4"></i>
-            <p class="text-gray-300">加载考试数据失败</p>
-            <p class="text-gray-200 text-sm mt-2">${error.message}</p>
-            <button onclick="loadExamData()" class="btn-primary mt-4">重试</button>
-        `;
+        console.error('加载配置数据失败:', error);
+        throw error;
     }
 }
 
-// 加载历史错题
-async function loadMistakesHistory() {
-    const mistakesLoading = document.getElementById('mistakes-loading');
-    const noMistakes = document.getElementById('no-mistakes');
-    const mistakesTableContainer = document.getElementById('mistakes-table-container');
-    const mistakesTableBody = document.getElementById('mistakes-table-body');
-    
+// 加载历史错题列表
+async function loadMistakesList() {
     try {
-        const response = await fetch(`${API_BASE_URL}/mistakes`);
+        const mistakesContainer = document.getElementById('mistakes-table-container');
+        showLoading(mistakesContainer);
         
-        if (!response.ok) {
-            throw new Error('获取错题数据失败');
-        }
+        mistakesList = await apiRequest('/mistakes');
         
-        const mistakes = await response.json();
-        
-        mistakesLoading.classList.add('hidden');
-        
-        if (mistakes.length === 0) {
-            noMistakes.classList.remove('hidden');
+        if (mistakesList.length === 0) {
+            mistakesTable.parentElement.innerHTML = `
+                <tr>
+                    <td colspan="6" class="text-center py-6 text-gray-400">
+                        <i class="fa fa-file-text-o text-2xl mb-2"></i>
+                        <p>暂无错题记录</p>
+                    </td>
+                </tr>
+            `;
             return;
         }
         
-        mistakesTableContainer.classList.remove('hidden');
+        // 清空表格
+        mistakesTable.innerHTML = '';
         
-        // 填充错题表格
-        mistakes.forEach(mistake => {
+        // 填充表格
+        mistakesList.forEach(mistake => {
             const row = document.createElement('tr');
-            row.className = 'hover:bg-gray-50 transition-colors';
+            row.className = 'border-b border-gray-100 hover:bg-gray-50 transition-colors';
             
             row.innerHTML = `
-                <td class="py-3 whitespace-nowrap">${mistake.subjectName}</td>
-                <td class="py-3 whitespace-nowrap">${mistake.grade}</td>
-                <td class="py-3 whitespace-nowrap">${mistake.examType}</td>
-                <td class="py-3">${mistake.fileName}</td>
-                <td class="py-3 whitespace-nowrap">${formatDate(mistake.createdAt)}</td>
-                <td class="py-3 whitespace-nowrap">
-                    <button onclick="viewMistake('${mistake.id}')" class="text-primary hover:text-primary/80 text-sm">
-                        查看
+                <td class="py-3 px-4">${mistake.subjectName || '-'}</td>
+                <td class="py-3 px-4">${mistake.grade || '-'}</td>
+                <td class="py-3 px-4">${mistake.examType || '-'}</td>
+                <td class="py-3 px-4 truncate max-w-[150px]">${mistake.fileName || '-'}</td>
+                <td class="py-3 px-4">${formatDate(mistake.createdAt)}</td>
+                <td class="py-3 px-4">
+                    <button class="text-primary hover:text-primary/80 view-mistake-btn" 
+                            data-id="${mistake.id}">
+                        <i class="fa fa-eye mr-1"></i> 查看
                     </button>
                 </td>
             `;
             
-            mistakesTableBody.appendChild(row);
+            mistakesTable.appendChild(row);
+        });
+        
+        // 添加查看事件监听
+        document.querySelectorAll('.view-mistake-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const mistakeId = e.currentTarget.dataset.id;
+                window.open(`view-mistake.html?id=${mistakeId}`, '_blank');
+            });
         });
         
     } catch (error) {
-        console.error('加载错题历史失败:', error);
-        mistakesLoading.classList.add('hidden');
-        noMistakes.classList.remove('hidden');
-        noMistakes.innerHTML = `
-            <i class="fa fa-exclamation-circle text-danger text-5xl mb-4"></i>
-            <p class="text-gray-300">加载错题数据失败</p>
-            <p class="text-gray-200 text-sm mt-2">${error.message}</p>
-            <button onclick="loadMistakesHistory()" class="btn-primary mt-4">重试</button>
-        `;
+        console.error('加载错题列表失败:', error);
+        showError(mistakesContainer, '加载错题记录失败');
     }
 }
 
-// 加载历史分析报告
-async function loadAnalysesHistory() {
-    const analysesLoading = document.getElementById('analyses-loading');
-    const noAnalyses = document.getElementById('no-analyses');
-    const analysesTableContainer = document.getElementById('analyses-table-container');
-    const analysesTableBody = document.getElementById('analyses-table-body');
-    
+// 加载历史分析报告列表
+async function loadAnalysesList() {
     try {
-        const response = await fetch(`${API_BASE_URL}/analyses`);
+        const analysesContainer = document.getElementById('analyses-table-container');
+        showLoading(analysesContainer);
         
-        if (!response.ok) {
-            throw new Error('获取分析报告数据失败');
-        }
+        analysesList = await apiRequest('/analyses');
         
-        const analyses = await response.json();
-        
-        analysesLoading.classList.add('hidden');
-        
-        if (analyses.length === 0) {
-            noAnalyses.classList.remove('hidden');
+        if (analysesList.length === 0) {
+            analysesTable.parentElement.innerHTML = `
+                <tr>
+                    <td colspan="4" class="text-center py-6 text-gray-400">
+                        <i class="fa fa-bar-chart text-2xl mb-2"></i>
+                        <p>暂无分析报告</p>
+                    </td>
+                </tr>
+            `;
             return;
         }
         
-        analysesTableContainer.classList.remove('hidden');
+        // 清空表格
+        analysesTable.innerHTML = '';
         
-        // 填充分析报告表格
-        analyses.forEach(analysis => {
+        // 填充表格
+        analysesList.forEach(analysis => {
             const row = document.createElement('tr');
-            row.className = 'hover:bg-gray-50 transition-colors';
+            row.className = 'border-b border-gray-100 hover:bg-gray-50 transition-colors';
             
             row.innerHTML = `
-                <td class="py-3">${analysis.title}</td>
-                <td class="py-3 whitespace-nowrap">${analysis.examType}</td>
-                <td class="py-3 whitespace-nowrap">${formatDate(analysis.createdAt)}</td>
-                <td class="py-3 whitespace-nowrap">
-                    <button onclick="viewAnalysis('${analysis.id}')" class="text-accent hover:text-accent/80 text-sm">
-                        查看
+                <td class="py-3 px-4 truncate max-w-[150px]">${analysis.title || '-'}</td>
+                <td class="py-3 px-4">${analysis.examType || '-'}</td>
+                <td class="py-3 px-4">${formatDate(analysis.createdAt)}</td>
+                <td class="py-3 px-4">
+                    <button class="text-primary hover:text-primary/80 view-analysis-btn" 
+                            data-id="${analysis.id}">
+                        <i class="fa fa-eye mr-1"></i> 查看
                     </button>
                 </td>
             `;
             
-            analysesTableBody.appendChild(row);
+            analysesTable.appendChild(row);
+        });
+        
+        // 添加查看事件监听
+        document.querySelectorAll('.view-analysis-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const analysisId = e.currentTarget.dataset.id;
+                window.open(`view-analysis.html?id=${analysisId}`, '_blank');
+            });
         });
         
     } catch (error) {
-        console.error('加载分析报告历史失败:', error);
-        analysesLoading.classList.add('hidden');
-        noAnalyses.classList.remove('hidden');
-        noAnalyses.innerHTML = `
-            <i class="fa fa-exclamation-circle text-danger text-5xl mb-4"></i>
-            <p class="text-gray-300">加载分析报告数据失败</p>
-            <p class="text-gray-200 text-sm mt-2">${error.message}</p>
-            <button onclick="loadAnalysesHistory()" class="btn-primary mt-4">重试</button>
-        `;
+        console.error('加载分析报告列表失败:', error);
+        showError(analysesContainer, '加载分析报告失败');
     }
 }
 
-// 处理文件选择
-function handleFileSelection(event) {
-    const file = event.target.files[0];
-    if (file) {
-        processFile(file);
-    }
+// 初始化表单
+function initForms() {
+    // 上传文件预览
+    fileInput.addEventListener('change', handleFilePreview);
+    
+    // 上传按钮点击事件
+    uploadMistakeBtn.addEventListener('click', () => {
+        uploadModal.classList.remove('hidden');
+        // 添加动画
+        setTimeout(() => {
+            uploadModal.classList.add('modal-visible');
+        }, 10);
+    });
+    
+    // 分析按钮点击事件
+    analyzeScoreBtn.addEventListener('click', () => {
+        analyzeModal.classList.remove('hidden');
+        // 添加动画
+        setTimeout(() => {
+            analyzeModal.classList.add('modal-visible');
+        }, 10);
+    });
+    
+    // 关闭上传模态框
+    closeUploadModal.addEventListener('click', closeUploadModalFunc);
+    
+    // 关闭分析模态框
+    closeAnalyzeModal.addEventListener('click', closeAnalyzeModalFunc);
+    
+    // 点击模态框外部关闭
+    uploadModal.addEventListener('click', (e) => {
+        if (e.target === uploadModal) closeUploadModalFunc();
+    });
+    
+    analyzeModal.addEventListener('click', (e) => {
+        if (e.target === analyzeModal) closeAnalyzeModalFunc();
+    });
+    
+    // 提交上传表单
+    uploadForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        await handleUploadMistake();
+    });
+    
+    // 生成分析报告
+    generateAnalysisBtn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        await handleGenerateAnalysis();
+    });
 }
 
-// 处理拖放事件
-function handleDragOver(event) {
-    event.preventDefault();
-    fileUploadArea.classList.add('border-primary');
-}
-
-function handleDragLeave() {
-    fileUploadArea.classList.remove('border-primary');
-}
-
-function handleFileDrop(event) {
-    event.preventDefault();
-    fileUploadArea.classList.remove('border-primary');
-    
-    const file = event.dataTransfer.files[0];
-    if (file) {
-        processFile(file);
-    }
-}
-
-// 处理文件上传和OCR识别
-function processFile(file) {
-    // 验证文件类型
-    const allowedTypes = ['image/png', 'image/jpeg', 'application/pdf'];
-    if (!allowedTypes.includes(file.type)) {
-        showToast('请上传PNG、JPG或PDF格式的文件', 'error');
-        return;
-    }
-    
-    // 显示上传进度
-    uploadFilename.textContent = file.name;
-    uploadProgress.classList.remove('hidden');
-    uploadProgressBar.style.width = '0%';
-    uploadPercentage.textContent = '0%';
-    
-    // 创建FormData
-    const formData = new FormData();
-    formData.append('file', file);
-    
-    // 模拟上传进度
-    let progress = 0;
-    const interval = setInterval(() => {
-        progress += 5;
-        uploadProgressBar.style.width = `${progress}%`;
-        uploadPercentage.textContent = `${progress}%`;
-        
-        if (progress >= 100) {
-            clearInterval(interval);
-            
-            // 上传完成后进行OCR识别
-            ocrProcessing.classList.remove('hidden');
-            
-            // 调用API进行OCR识别
-            const ocrFormData = new FormData();
-            ocrFormData.append('file', file);
-            
-            // 这里只是模拟，实际会在提交表单时处理
-            setTimeout(() => {
-                ocrProcessing.classList.add('hidden');
-                saveMistakeBtn.disabled = false;
-                
-                // 实际应用中这里会显示真实的OCR结果
-                recognizedContent.value = `正在识别文件内容...\n\n文件名称: ${file.name}\n文件大小: ${(file.size / 1024).toFixed(1)}KB\n文件类型: ${file.type}`;
-            }, 1500);
-        }
-    }, 100);
-}
-
-// 处理错题表单提交
-async function handleMistakeFormSubmit(event) {
-    event.preventDefault();
-    
-    const file = mistakeFileInput.files[0];
+// 处理文件预览
+function handleFilePreview(e) {
+    const file = e.target.files[0];
     if (!file) {
-        showToast('请先上传文件', 'error');
+        filePreview.innerHTML = '';
         return;
     }
     
-    // 获取表单数据
-    const subjectSelect = document.getElementById('mistake-subject');
-    const subject = subjectSelect.value;
-    const subjectName = subjectSelect.options[subjectSelect.selectedIndex].dataset.name;
-    const grade = document.getElementById('mistake-grade').value;
-    const examType = document.getElementById('mistake-exam-type').value;
-    const reason = document.getElementById('mistake-reason').value;
-    const notes = document.getElementById('mistake-notes').value;
+    // 验证文件类型
+    const allowedTypes = [
+        'image/jpeg', 'image/png', 'image/jpg',
+        'application/pdf'
+    ];
     
-    // 验证必填字段
-    if (!subject || !grade || !examType) {
-        showToast('请填写所有必填字段', 'error');
+    if (!allowedTypes.includes(file.type)) {
+        showNotification('不支持的文件类型，仅支持JPG、PNG、PDF格式', 'error');
+        fileInput.value = '';
+        filePreview.innerHTML = '';
         return;
     }
     
-    // 创建FormData
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('subject', subject);
-    formData.append('subjectName', subjectName);
-    formData.append('grade', grade);
-    formData.append('examType', examType);
-    formData.append('reason', reason);
-    formData.append('notes', notes);
-    formData.append('content', recognizedContent.value);
+    // 验证文件大小
+    if (file.size > 10 * 1024 * 1024) {
+        showNotification('文件过大，最大支持10MB', 'error');
+        fileInput.value = '';
+        filePreview.innerHTML = '';
+        return;
+    }
     
-    // 显示加载状态
-    saveMistakeBtn.disabled = true;
-    saveMistakeBtn.innerHTML = '<i class="fa fa-spinner fa-spin mr-2"></i> 保存中...';
+    // 显示文件预览
+    if (file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            filePreview.innerHTML = `
+                <div class="mt-3">
+                    <img src="${event.target.result}" alt="预览图" class="max-w-full max-h-[300px] object-contain rounded-md border border-gray-100">
+                    <p class="text-sm text-gray-400 mt-2">${file.name} (${(file.size / 1024).toFixed(1)} KB)</p>
+                </div>
+            `;
+        };
+        reader.readAsDataURL(file);
+    } else if (file.type === 'application/pdf') {
+        filePreview.innerHTML = `
+            <div class="mt-3 flex items-center p-4 border border-gray-100 rounded-md bg-gray-50">
+                <i class="fa fa-file-pdf-o text-red-500 text-2xl mr-3"></i>
+                <div>
+                    <p class="font-medium">${file.name}</p>
+                    <p class="text-sm text-gray-400">${(file.size / 1024).toFixed(1)} KB · PDF文件</p>
+                </div>
+            </div>
+        `;
+    }
     
+    // 自动上传并识别
+    setTimeout(() => {
+        uploadFileAndRecognize(file);
+    }, 500);
+}
+
+// 上传文件并识别内容
+async function uploadFileAndRecognize(file) {
     try {
-        // 提交表单数据
-        const response = await fetch(`${API_BASE_URL}/mistakes`, {
+        // 显示上传进度
+        uploadProgress.classList.remove('hidden');
+        uploadProgress.querySelector('.progress-bar').style.width = '10%';
+        
+        // 创建FormData
+        const formData = new FormData();
+        formData.append('file', file);
+        
+        // 上传文件
+        const response = await fetch(`${API_CONFIG.baseUrl}/upload`, {
             method: 'POST',
             body: formData
         });
         
-        const result = await response.json();
+        uploadProgress.querySelector('.progress-bar').style.width = '50%';
         
         if (!response.ok) {
-            throw new Error(result.error || '保存错题失败');
+            throw new Error('文件上传失败');
         }
         
-        // 显示成功提示
-        showToast('错题保存成功');
+        const result = await response.json();
         
-        // 关闭模态框
-        closeUploadModalHandler();
+        if (!result.success) {
+            throw new Error(result.message || '文件上传失败');
+        }
         
-        // 重置表单
-        mistakeForm.reset();
-        mistakeFileInput.value = '';
+        // 保存文件信息到表单
+        const fileInfoInput = document.getElementById('file-info');
+        fileInfoInput.value = JSON.stringify(result.data);
+        
+        uploadProgress.querySelector('.progress-bar').style.width = '60%';
+        
+        // 识别文件内容
+        const ocrResult = await apiRequest('/ocr/recognize', 'POST', {
+            fileUrl: result.data.fileUrl
+        });
+        
+        uploadProgress.querySelector('.progress-bar').style.width = '100%';
+        
+        if (ocrResult.success && ocrResult.content) {
+            ocrContent.value = ocrResult.content;
+        } else {
+            ocrContent.value = '未能识别文件内容，请手动输入';
+            showNotification('文件内容识别失败，请手动输入', 'warning');
+        }
+        
+        // 隐藏进度条
+        setTimeout(() => {
+            uploadProgress.classList.add('hidden');
+            uploadProgress.querySelector('.progress-bar').style.width = '0';
+        }, 500);
+        
+    } catch (error) {
+        console.error('文件上传和识别失败:', error);
         uploadProgress.classList.add('hidden');
-        recognizedContent.value = '';
+        uploadProgress.querySelector('.progress-bar').style.width = '0';
+        showNotification(`文件处理失败: ${error.message}`, 'error');
+    }
+}
+
+// 处理上传错题
+async function handleUploadMistake() {
+    try {
+        // 获取表单数据
+        const subjectSelect = document.getElementById('subject-select');
+        const grade = document.getElementById('grade-select').value;
+        const examType = document.getElementById('exam-type-select').value;
+        const reason = document.getElementById('reason-select').value;
+        const notes = document.getElementById('notes-textarea').value;
+        const content = ocrContent.value;
+        const fileInfoInput = document.getElementById('file-info');
         
-        // 重新加载错题历史
-        document.getElementById('mistakes-table-body').innerHTML = '';
-        loadMistakesHistory();
+        // 验证表单
+        if (!subjectSelect.value || !grade || !examType) {
+            showNotification('科目、年级和考试类型为必填项', 'warning');
+            return;
+        }
+        
+        if (!fileInfoInput.value) {
+            showNotification('请先上传错题文件', 'warning');
+            return;
+        }
+        
+        // 构建请求数据
+        const mistakeData = {
+            subject: subjectSelect.value,
+            subjectName: subjectSelect.options[subjectSelect.selectedIndex].dataset.name,
+            grade,
+            examType,
+            reason,
+            notes,
+            content,
+            fileInfo: JSON.parse(fileInfoInput.value)
+        };
+        
+        // 显示加载状态
+        const submitBtn = uploadForm.querySelector('button[type="submit"]');
+        const originalText = submitBtn.innerHTML;
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fa fa-spinner fa-spin mr-2"></i> 保存中...';
+        
+        // 提交数据
+        const result = await apiRequest('/mistakes', 'POST', mistakeData);
+        
+        if (result.success && result.data.mistakeId) {
+            showNotification('错题保存成功', 'success');
+            
+            // 关闭模态框
+            closeUploadModalFunc();
+            
+            // 重置表单
+            uploadForm.reset();
+            filePreview.innerHTML = '';
+            ocrContent.value = '';
+            fileInfoInput.value = '';
+            fileInput.value = '';
+            
+            // 重新加载错题列表
+            await loadMistakesList();
+        } else {
+            throw new Error(result.message || '保存错题失败');
+        }
         
     } catch (error) {
         console.error('保存错题失败:', error);
-        showToast(`保存失败: ${error.message}`, 'error');
-        saveMistakeBtn.disabled = false;
-        saveMistakeBtn.innerHTML = '保存错题';
+        showNotification(`保存失败: ${error.message}`, 'error');
+    } finally {
+        // 恢复按钮状态
+        const submitBtn = uploadForm.querySelector('button[type="submit"]');
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '保存错题';
     }
 }
 
-// 处理分析表单提交
-async function handleAnalyzeFormSubmit(event) {
-    event.preventDefault();
-    
-    // 获取表单数据
-    const examId = document.getElementById('analysis-exam').value;
-    const title = document.getElementById('analysis-title').value;
-    
-    // 验证字段
-    if (!examId || !title) {
-        showToast('请填写所有必填字段', 'error');
-        return;
-    }
-    
-    // 显示加载状态
-    generateAnalysisBtn.disabled = true;
-    generateAnalysisBtn.innerHTML = '<i class="fa fa-spinner fa-spin mr-2"></i> 生成中...';
-    analyzeFormContainer.classList.add('hidden');
-    analysisProcessing.classList.remove('hidden');
-    
+// 处理生成分析报告
+async function handleGenerateAnalysis() {
     try {
-        // 提交分析请求
-        const response = await fetch(`${API_BASE_URL}/analyses`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                examId,
-                title
-            })
-        });
+        // 获取表单数据
+        const examId = document.getElementById('analyze-exam-select').value;
+        const analysisTitle = document.getElementById('analysis-title').value;
         
-        const result = await response.json();
-        
-        if (!response.ok) {
-            throw new Error(result.error || '生成分析报告失败');
+        // 验证表单
+        if (!examId) {
+            showNotification('请选择要分析的考试', 'warning');
+            return;
         }
         
-        // 显示成功提示
-        showToast('分析报告生成成功');
+        if (!analysisTitle) {
+            showNotification('请输入分析报告标题', 'warning');
+            return;
+        }
         
-        // 关闭模态框
-        closeAnalyzeModalHandler();
+        // 显示加载状态
+        generateAnalysisBtn.disabled = true;
+        generateAnalysisBtn.innerHTML = '<i class="fa fa-spinner fa-spin mr-2"></i> 生成中...';
+        analysisProgress.classList.remove('hidden');
         
-        // 重置表单
-        analyzeForm.reset();
+        // 调用API生成分析报告
+        const result = await apiRequest('/analyses', 'POST', {
+            examId,
+            title: analysisTitle
+        });
         
-        // 重新加载分析报告历史
-        document.getElementById('analyses-table-body').innerHTML = '';
-        loadAnalysesHistory();
-        
-        // 跳转到分析报告页面
-        viewAnalysis(result.analysisId);
+        if (result.success && result.data.analysisId) {
+            showNotification('分析报告已开始生成，将在几分钟内完成', 'success');
+            
+            // 关闭模态框
+            closeAnalyzeModalFunc();
+            
+            // 重置表单
+            analyzeForm.reset();
+            
+            // 重新加载分析报告列表
+            await loadAnalysesList();
+        } else {
+            throw new Error(result.message || '生成分析报告失败');
+        }
         
     } catch (error) {
         console.error('生成分析报告失败:', error);
-        showToast(`生成失败: ${error.message}`, 'error');
-        analysisProcessing.classList.add('hidden');
-        analyzeFormContainer.classList.remove('hidden');
+        showNotification(`生成失败: ${error.message}`, 'error');
+    } finally {
+        // 恢复按钮状态
         generateAnalysisBtn.disabled = false;
         generateAnalysisBtn.innerHTML = '生成分析报告';
+        analysisProgress.classList.add('hidden');
     }
 }
 
-// 打开上传错题模态框
-function openUploadModal() {
-    uploadMistakeModal.classList.remove('hidden');
-    document.body.style.overflow = 'hidden';
-}
-
-// 打开成绩分析模态框
-function openAnalyzeModal() {
-    analyzeScoresModal.classList.remove('hidden');
-    document.body.style.overflow = 'hidden';
-}
-
-// 关闭上传错题模态框
-function closeUploadModalHandler() {
-    uploadMistakeModal.classList.add('hidden');
-    document.body.style.overflow = '';
-    
-    // 重置表单状态
-    mistakeForm.reset();
-    mistakeFileInput.value = '';
-    uploadProgress.classList.add('hidden');
-    ocrProcessing.classList.add('hidden');
-    recognizedContent.value = '';
-    saveMistakeBtn.disabled = true;
-    saveMistakeBtn.innerHTML = '保存错题';
-}
-
-// 关闭成绩分析模态框
-function closeAnalyzeModalHandler() {
-    analyzeScoresModal.classList.add('hidden');
-    document.body.style.overflow = '';
-    
-    // 重置表单状态
-    analyzeForm.reset();
-    analysisProcessing.classList.add('hidden');
-    generateAnalysisBtn.disabled = false;
-    generateAnalysisBtn.innerHTML = '生成分析报告';
-}
-
-// 查看错题
-function viewMistake(mistakeId) {
-    window.open(`view-mistake.html?id=${mistakeId}`, '_blank');
-}
-
-// 查看分析报告
-function viewAnalysis(analysisId) {
-    window.open(`view-analysis.html?id=${analysisId}`, '_blank');
-}
-
-// 显示提示消息
-function showToast(message, type = 'success') {
-    successMessage.textContent = message;
-    
-    if (type === 'error') {
-        successToast.classList.remove('bg-success');
-        successToast.classList.add('bg-danger');
-    } else {
-        successToast.classList.remove('bg-danger');
-        successToast.classList.add('bg-success');
-    }
-    
-    // 显示提示
-    successToast.classList.remove('translate-y-20', 'opacity-0');
-    
-    // 3秒后隐藏
+// 关闭上传模态框
+function closeUploadModalFunc() {
+    uploadModal.classList.remove('modal-visible');
     setTimeout(() => {
-        successToast.classList.add('translate-y-20', 'opacity-0');
-    }, 3000);
+        uploadModal.classList.add('hidden');
+    }, 300);
 }
 
-// 格式化日期
-function formatDate(dateString) {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('zh-CN', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit'
-    });
+// 关闭分析模态框
+function closeAnalyzeModalFunc() {
+    analyzeModal.classList.remove('modal-visible');
+    setTimeout(() => {
+        analyzeModal.classList.add('hidden');
+    }, 300);
 }
     

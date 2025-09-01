@@ -16,3 +16,8 @@ app:
   name: "学习分析工具"
   version: "1.0.0"
   debug: false
+  
+const API_CONFIG = {
+  baseUrl: "https://api.mistakes.huigg.xyz/api",
+  timeout: 30000
+};
