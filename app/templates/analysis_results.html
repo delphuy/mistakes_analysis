@@ -1,0 +1,78 @@
+{% extends 'base.html' %}
+
+{% block title %}分析报告 - 学析优{% endblock %}
+
+{% block content %}
+<section class="section">
+    <div class="max-w-6xl mx-auto">
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between mb-10">
+            <div>
+                <h1 class="text-3xl font-bold mb-2">分析报告</h1>
+                <p class="text-gray-600">所有生成的学习分析报告，按时间倒序排列</p>
+            </div>
+            <div class="mt-4 md:mt-0">
+                <a href="{{ url_for('main.grade_analysis') }}" class="btn-primary">
+                    <i class="fa fa-plus mr-2"></i> 生成新报告
+                </a>
+            </div>
+        </div>
+        
+        {% if analyses %}
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {% for analysis in analyses %}
+                    <div class="card card-hover-effect">
+                        <div class="p-6">
+                            <div class="flex justify-between items-start mb-4">
+                                <h3 class="text-lg font-bold text-gray-900 line-clamp-2">
+                                    {{ analysis.title }}
+                                </h3>
+                                <span class="badge bg-primary/10 text-primary">
+                                    {{ analysis.create_time.strftime('%Y-%m-%d') }}
+                                </span>
+                            </div>
+                            
+                            <div class="mb-4">
+                                <p class="text-sm text-gray-600 line-clamp-3 mb-3">
+                                    {{ analysis.content|truncate(100) }}
+                                </p>
+                                
+                                <!-- 关联数据统计 -->
+                                <div class="flex items-center text-xs text-gray-500 space-x-4">
+                                    {% set examCount = analysis.related_exams.split(',').__len__() if analysis.related_exams else 0 %}
+                                    <div class="flex items-center">
+                                        <i class="fa fa-file-excel-o mr-1"></i>
+                                        <span>{{ examCount }} 次考试</span>
+                                    </div>
+                                    
+                                    {% set questionCount = analysis.related_questions.split(',').__len__() if analysis.related_questions else 0 %}
+                                    <div class="flex items-center">
+                                        <i class="fa fa-file-text-o mr-1"></i>
+                                        <span>{{ questionCount }} 道错题</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="pt-2">
+                                <a href="{{ url_for('main.view_analysis', analysis_id=analysis.id) }}" 
+                                   class="btn-outline w-full flex justify-center items-center"
+                                   data-new-window>
+                                    查看报告 <i class="fa fa-arrow-right ml-2"></i>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="card text-center py-16">
+                <i class="fa fa-bar-chart text-5xl mb-4 text-gray-300"></i>
+                <h3 class="text-xl font-medium mb-2">暂无分析报告</h3>
+                <p class="text-gray-500 mb-6">还没有生成任何分析报告</p>
+                <a href="{{ url_for('main.grade_analysis') }}" class="btn-primary inline-flex items-center">
+                    <i class="fa fa-magic mr-2"></i> 生成第一个分析报告
+                </a>
+            </div>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}

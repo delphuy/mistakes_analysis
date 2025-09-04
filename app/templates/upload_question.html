@@ -1,0 +1,56 @@
+{% extends 'base.html' %}
+
+{% block title %}上传错题 - 学析优{% endblock %}
+
+{% block content %}
+<section class="section">
+    <div class="max-w-3xl mx-auto">
+        <div class="mb-8">
+            <h1 class="text-3xl font-bold mb-2">上传错题</h1>
+            <p class="text-gray-600">上传错题图片或PDF文件，系统将自动识别内容</p>
+        </div>
+        
+        <div class="card">
+            <div class="p-6">
+                <form method="POST" enctype="multipart/form-data" class="space-y-6" data-validate>
+                    <div>
+                        <label for="file" class="block text-sm font-medium text-gray-700 mb-2">
+                            选择错题文件
+                        </label>
+                        <div class="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-lg hover:border-primary transition-colors">
+                            <div class="space-y-1 text-center">
+                                <i class="fa fa-file-text-o text-3xl text-gray-400 mb-2"></i>
+                                <div class="flex text-sm text-gray-600">
+                                    <label for="file" class="relative cursor-pointer bg-white rounded-md font-medium text-primary hover:text-primary/80 focus-within:outline-none">
+                                        <span>上传文件</span>
+                                        <input id="file" name="file" type="file" class="sr-only" 
+                                               accept=".jpg,.jpeg,.png,.pdf" required>
+                                    </label>
+                                    <p class="pl-1">或拖放文件到此处</p>
+                                </div>
+                                <p class="text-xs text-gray-500">
+                                    支持的格式: JPG, JPEG, PNG, PDF (最大 10MB)
+                                </p>
+                            </div>
+                        </div>
+                        <div class="file-preview mt-3"></div>
+                        <div id="selected-files-container" class="mt-4 hidden">
+                            <h4 class="text-sm font-medium text-gray-700 mb-2">已选文件：</h4>
+                            <div id="selected-files-list" class="space-y-2"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="flex justify-end space-x-4">
+                        <a href="{{ url_for('main.index') }}" class="btn-outline">
+                            取消
+                        </a>
+                        <button type="submit" class="btn-primary">
+                            <i class="fa fa-upload mr-2"></i> 上传并识别
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}

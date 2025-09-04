@@ -1,0 +1,380 @@
+{% extends 'base.html' %}
+
+{% block title %}成绩分析 - 学析优{% endblock %}
+
+{% block head %}
+<meta name="csrf-token" content="{{ csrf_token() }}">
+{% endblock %}
+
+{% block content %}
+<section class="section">
+    <div class="max-w-6xl mx-auto">
+        <div class="text-center mb-10">
+            <h1 class="text-3xl font-bold mb-3">成绩分析</h1>
+            <p class="text-gray-600">选择考试成绩和错题数据，生成个性化学习分析报告</p>
+        </div>
+        
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- 左侧：选择考试成绩 -->
+            <div class="lg:col-span-1">
+                <div class="card h-full">
+                    <div class="p-6 border-b border-gray-100 flex justify-between items-center">
+                        <h2 class="text-xl font-bold">选择考试成绩</h2>
+                        <div>
+                            <button type="button" onclick="toggleAll('exam')" class="text-sm text-primary hover:underline mr-3">全选/取消</button>
+                            <a href="{{ url_for('main.import_scores') }}" class="text-sm text-primary hover:underline"><i class="fa fa-plus mr-1"></i> 导入成绩</a>
+                        </div>
+                    </div>
+                    
+                    <div class="p-6 max-h-[500px] overflow-y-auto">
+                        <!-- 已选考试显示区域 -->
+                        <div id="selected-exams" class="mb-3 hidden">
+                            <div class="text-sm font-medium text-gray-700 mb-1">已选考试:</div>
+                            <div id="selected-exams-list" class="flex flex-wrap gap-2"></div>
+                        </div>
+
+                        {% if exams %}
+                            <div class="space-y-3">
+                                {% for exam in exams %}
+                                    <div class="border border-gray-200 rounded-lg p-4 hover:border-primary transition-colors">
+                                        <div class="flex items-start">
+                                            <div class="flex items-center h-5">
+                                                <input id="exam-{{ exam.id }}" name="exam_ids" type="checkbox"
+                                                       value="{{ exam.id }}" class="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded" checked
+                                                       onchange="updateSelectedItems('exam')">
+                                            </div>
+                                            <div class="ml-3 text-sm">
+                                                <label for="exam-{{ exam.id }}" class="font-medium text-gray-900 cursor-pointer">
+                                                    {{ exam.grade }} {{ exam.exam_type }}
+                                                </label>
+                                                <p class="text-gray-500">{{ exam.date.strftime('%Y-%m-%d') }}</p>
+
+                                                <!-- 显示主要科目成绩 -->
+                                                <div class="mt-2 grid grid-cols-3 gap-2 text-xs">
+                                                    <div class="bg-gray-50 p-1 rounded">
+                                                        <span class="text-gray-500">语文:</span>
+                                                        <span class="font-medium">{{ exam.chinese or '-' }}</span>
+                                                    </div>
+                                                    <div class="bg-gray-50 p-1 rounded">
+                                                        <span class="text-gray-500">数学:</span>
+                                                        <span class="font-medium">{{ exam.math or '-' }}</span>
+                                                    </div>
+                                                    <div class="bg-gray-50 p-1 rounded">
+                                                        <span class="text-gray-500">英语:</span>
+                                                        <span class="font-medium">{{ exam.english or '-' }}</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <div class="text-center py-10 text-gray-500">
+                                <i class="fa fa-file-excel-o text-4xl mb-3 opacity-30"></i>
+                                <p>暂无考试成绩数据</p>
+                                <a href="{{ url_for('main.import_scores') }}" class="text-primary hover:underline mt-2 inline-block">
+                                    点击导入成绩
+                                </a>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- 中间：选择错题 -->
+            <div class="lg:col-span-1">
+                <div class="card h-full">
+                    <div class="p-6 border-b border-gray-100 flex justify-between items-center">
+                        <h2 class="text-xl font-bold">选择错题</h2>
+                            <div>
+                                <button type="button" onclick="toggleAll('question')" class="text-sm text-primary hover:underline mr-3">全选/取消</button>
+                                <a href="{{ url_for('main.upload_question') }}" class="text-sm text-primary hover:underline">
+                                     <i class="fa fa-plus mr-1"></i> 上传错题
+                                </a>
+                            </div>
+                    </div>
+
+                    <div class="p-6 max-h-[500px] overflow-y-auto">
+                        <!-- 已选错题显示区域 -->
+                        <div id="selected-questions" class="mb-3 hidden">
+                            <div class="text-sm font-medium text-gray-700 mb-1">已选错题:</div>
+                            <div id="selected-questions-list" class="flex flex-wrap gap-2"></div>
+                        </div>
+
+                        {% if questions %}
+                            <div class="space-y-3">
+                                {% for question in questions %}
+                                    <div class="border border-gray-200 rounded-lg p-4 hover:border-primary transition-colors">
+                                        <div class="flex items-start">
+                                            <div class="flex items-center h-5">
+                                                <input id="question-{{ question.id }}" name="question_ids" type="checkbox"
+                                                       value="{{ question.id }}" class="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded" checked
+                                                       onchange="updateSelectedItems('question')">
+                                            </div>
+                                            <div class="ml-3 text-sm flex-1">
+                                                <label for="question-{{ question.id }}" class="font-medium text-gray-900 cursor-pointer truncate">
+                                                    {{ question.filename }}
+                                                </label>
+                                                <p class="text-gray-500">
+                                                    {{ question.subject or '未分类' }} · {{ question.grade or '未设置' }}
+                                                </p>
+
+                                                {% if question.content %}
+                                                    <div class="mt-2 bg-gray-50 p-2 rounded text-xs text-gray-600 line-clamp-2">
+                                                        {{ question.content }}
+                                                    </div>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <div class="text-center py-10 text-gray-500">
+                                <i class="fa fa-file-text-o text-4xl mb-3 opacity-30"></i>
+                                <p>暂无错题数据</p>
+                                <a href="{{ url_for('main.upload_question') }}" class="text-primary hover:underline mt-2 inline-block">
+                                    点击上传错题
+                                </a>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- 右侧：分析选项和按钮 -->
+            <div class="lg:col-span-1">
+                <div class="card h-full">
+                    <div class="p-6 border-b border-gray-100">
+                        <h2 class="text-xl font-bold">分析选项</h2>
+                    </div>
+
+                    <div class="p-6">
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">
+                                    分析深度
+                                </label>
+                                <select id="analysis-depth" class="input-field">
+                                    <option value="basic">基础分析（快速）</option>
+                                    <option value="detailed" selected>详细分析</option>
+                                    <option value="comprehensive">全面分析（耗时较长）</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">
+                                    关注重点
+                                </label>
+                                <div class="space-y-2">
+                                    <div class="flex items-center">
+                                        <input id="focus-strengths" name="focus" type="checkbox" value="strengths"
+                                               class="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded" checked>
+                                        <label for="focus-strengths" class="ml-2 block text-sm text-gray-700">
+                                            优势学科拓展
+                                        </label>
+                                    </div>
+                                    <div class="flex items-center">
+                                        <input id="focus-weaknesses" name="focus" type="checkbox" value="weaknesses"
+                                               class="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded" checked>
+                                        <label for="focus-weaknesses" class="ml-2 block text-sm text-gray-700">
+                                            薄弱环节提升
+                                        </label>
+                                    </div>
+                                    <div class="flex items-center">
+                                        <input id="focus-strategy" name="focus" type="checkbox" value="strategy"
+                                               class="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded" checked>
+                                        <label for="focus-strategy" class="ml-2 block text-sm text-gray-700">
+                                            学习策略建议
+                                        </label>
+                                    </div>
+                                    <div class="flex items-center">
+                                        <input id="focus-plan" name="focus" type="checkbox" value="plan"
+                                               class="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded" checked>
+                                        <label for="focus-plan" class="ml-2 block text-sm text-gray-700">
+                                            阶段性学习计划
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="pt-6">
+                                <button id="generate-analysis-btn" class="btn-primary w-full flex justify-center items-center py-4 text-lg">
+                                    <i class="fa fa-magic mr-2"></i> 生成分析报告
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('成绩分析页面DOM内容已加载');
+
+    // 初始化已选项目显示
+    console.log('初始化已选项目显示');
+    updateSelectedItems('exam');
+    updateSelectedItems('question');
+
+    // 查找生成分析报告按钮
+    const generateBtn = document.getElementById('generate-analysis-btn');
+    if (!generateBtn) {
+        console.error('找不到生成分析报告按钮');
+        return;
+    }
+
+    console.log('找到生成分析报告按钮，添加点击事件监听器');
+
+    generateBtn.addEventListener('click', function() {
+        console.log('生成分析报告按钮被点击');
+
+        // 获取选中的考试和错题
+        const selectedExams = Array.from(document.querySelectorAll('input[name="exam_ids"]:checked'))
+            .map(checkbox => checkbox.value);
+
+        const selectedQuestions = Array.from(document.querySelectorAll('input[name="question_ids"]:checked'))
+            .map(checkbox => checkbox.value);
+
+        console.log('选中的考试:', selectedExams);
+        console.log('选中的错题:', selectedQuestions);
+
+        // 验证选择
+        if (selectedExams.length === 0 && selectedQuestions.length === 0) {
+            alert('请至少选择一项考试或错题进行分析');
+            return;
+        }
+
+        // 显示加载动画
+        const loadingDiv = document.createElement('div');
+        loadingDiv.id = 'loading-overlay';
+        loadingDiv.className = 'fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50';
+
+        const loadingContent = document.createElement('div');
+        loadingContent.className = 'bg-white p-6 rounded-lg shadow-xl flex flex-col items-center';
+
+        const spinner = document.createElement('div');
+        spinner.className = 'w-12 h-12 border-4 border-primary/30 border-t-primary rounded-full animate-spin mb-4';
+
+        const text = document.createElement('p');
+        text.className = 'text-gray-700 font-medium';
+        text.textContent = '正在生成分析报告，这可能需要几分钟时间...';
+
+        loadingContent.appendChild(spinner);
+        loadingContent.appendChild(text);
+        loadingDiv.appendChild(loadingContent);
+        document.body.appendChild(loadingDiv);
+
+        // 禁用按钮防止重复点击
+        generateBtn.disabled = true;
+        const originalText = generateBtn.innerHTML;
+        generateBtn.innerHTML = '<i class="fa fa-spinner fa-spin mr-2"></i> 分析中...';
+
+        // 获取CSRF令牌
+        function getCSRFToken() {
+            const metaToken = document.querySelector('meta[name="csrf-token"]');
+            if (metaToken) {
+                return metaToken.getAttribute('content');
+            }
+
+            const cookieValue = document.cookie
+                .split('; ')
+                .find(row => row.startsWith('csrf_token='))
+                ?.split('=')[1];
+            return cookieValue || '';
+        }
+
+        // 发送请求生成分析
+        fetch('/generate_analysis', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCSRFToken()
+            },
+            body: JSON.stringify({
+                exam_ids: selectedExams,
+                question_ids: selectedQuestions
+            })
+        })
+        .then(response => {
+            console.log('收到响应:', response.status);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('分析结果:', data);
+
+            if (data.status === 'success' && data.analysis_id) {
+                // 直接跳转到报告页面
+                window.location.href = '/view_analysis/' + data.analysis_id;
+            } else {
+                throw new Error(data.message || '生成分析报告失败');
+            }
+        })
+        .catch(error => {
+            console.error('生成分析报告错误:', error);
+            alert('生成分析报告失败: ' + error.message);
+        })
+        .finally(() => {
+            // 隐藏加载动画
+            const loadingOverlay = document.getElementById('loading-overlay');
+            if (loadingOverlay) {
+                loadingOverlay.remove();
+            }
+
+            // 恢复按钮状态
+            generateBtn.disabled = false;
+            generateBtn.innerHTML = originalText;
+        });
+    });
+});
+
+// 更新已选项目显示
+function updateSelectedItems(type) {
+    const checkboxes = document.querySelectorAll(`input[name="${type}_ids"]:checked`);
+    const container = document.getElementById(`selected-${type}s`);
+    const listContainer = document.getElementById(`selected-${type}s-list`);
+
+    if (!container || !listContainer) return;
+
+    if (checkboxes.length === 0) {
+        container.classList.add('hidden');
+        return;
+    }
+
+    container.classList.remove('hidden');
+    listContainer.innerHTML = '';
+
+    checkboxes.forEach(checkbox => {
+        const label = document.querySelector(`label[for="${checkbox.id}"]`);
+        if (label) {
+            const badge = document.createElement('span');
+            badge.className = 'badge bg-primary/10 text-primary text-xs';
+            badge.textContent = label.textContent.trim();
+            listContainer.appendChild(badge);
+        }
+    });
+}
+
+// 全选/取消全选功能
+function toggleAll(type) {
+    const checkboxes = document.querySelectorAll(`input[name="${type}_ids"]`);
+    const allChecked = Array.from(checkboxes).every(checkbox => checkbox.checked);
+
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = !allChecked;
+    });
+
+    // 更新已选项目显示
+    updateSelectedItems(type);
+}
+</script>
+{% endblock %}

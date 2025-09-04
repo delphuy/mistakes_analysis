@@ -1,0 +1,182 @@
+{% extends 'base.html' %}
+
+{% block title %}错题集 - 学析优{% endblock %}
+
+{% block content %}
+<section class="section">
+    <div class="max-w-6xl mx-auto">
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between mb-10">
+            <div>
+                <h1 class="text-3xl font-bold mb-2">错题集</h1>
+                <p class="text-gray-600">所有上传的错题记录，可筛选和搜索</p>
+            </div>
+            <div class="mt-4 md:mt-0">
+                <a href="{{ url_for('main.upload_question') }}" class="btn-primary">
+                    <i class="fa fa-plus mr-2"></i> 添加新错题
+                </a>
+            </div>
+        </div>
+        
+        <!-- 筛选和搜索 -->
+        <div class="card mb-6 p-6">
+            <form method="GET" class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div>
+                    <label for="subject-filter" class="block text-sm font-medium text-gray-700 mb-1">
+                        科目
+                    </label>
+                    <select id="subject-filter" name="subject" class="input-field">
+                        <option value="">所有科目</option>
+                        <option value="语文" {% if request.args.get('subject') == '语文' %}selected{% endif %}>语文</option>
+                        <option value="数学" {% if request.args.get('subject') == '数学' %}selected{% endif %}>数学</option>
+                        <option value="英语" {% if request.args.get('subject') == '英语' %}selected{% endif %}>英语</option>
+                        <option value="物理" {% if request.args.get('subject') == '物理' %}selected{% endif %}>物理</option>
+                        <option value="化学" {% if request.args.get('subject') == '化学' %}selected{% endif %}>化学</option>
+                        <option value="历史" {% if request.args.get('subject') == '历史' %}selected{% endif %}>历史</option>
+                        <option value="政治" {% if request.args.get('subject') == '政治' %}selected{% endif %}>政治</option>
+                        <option value="地理" {% if request.args.get('subject') == '地理' %}selected{% endif %}>地理</option>
+                        <option value="生物" {% if request.args.get('subject') == '生物' %}selected{% endif %}>生物</option>
+                    </select>
+                </div>
+                
+                <div>
+                    <label for="grade-filter" class="block text-sm font-medium text-gray-700 mb-1">
+                        年级
+                    </label>
+                    <select id="grade-filter" name="grade" class="input-field">
+                        <option value="">所有年级</option>
+                        <option value="初一" {% if request.args.get('grade') == '初一' %}selected{% endif %}>初一</option>
+                        <option value="初二" {% if request.args.get('grade') == '初二' %}selected{% endif %}>初二</option>
+                        <option value="初三" {% if request.args.get('grade') == '初三' %}selected{% endif %}>初三</option>
+                    </select>
+                </div>
+                
+                <div>
+                    <label for="reason-filter" class="block text-sm font-medium text-gray-700 mb-1">
+                        错误原因
+                    </label>
+                    <select id="reason-filter" name="reason" class="input-field">
+                        <option value="">所有原因</option>
+                        <option value="概念不清" {% if request.args.get('reason') == '概念不清' %}selected{% endif %}>概念不清</option>
+                        <option value="计算错误" {% if request.args.get('reason') == '计算错误' %}selected{% endif %}>计算错误</option>
+                        <option value="审题失误" {% if request.args.get('reason') == '审题失误' %}selected{% endif %}>审题失误</option>
+                        <option value="方法不当" {% if request.args.get('reason') == '方法不当' %}selected{% endif %}>方法不当</option>
+                        <option value="知识点盲区" {% if request.args.get('reason') == '知识点盲区' %}selected{% endif %}>知识点盲区</option>
+                        <option value="其他原因" {% if request.args.get('reason') == '其他原因' %}selected{% endif %}>其他原因</option>
+                    </select>
+                </div>
+                
+                <div>
+                    <label for="search" class="block text-sm font-medium text-gray-700 mb-1">
+                        搜索
+                    </label>
+                    <div class="relative">
+                        <input type="text" id="search" name="search" 
+                               value="{{ request.args.get('search', '') }}"
+                               class="input-field pr-10" 
+                               placeholder="搜索文件名或内容">
+                        <div class="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                            <i class="fa fa-search text-gray-400"></i>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="md:col-span-4 flex justify-end space-x-3 pt-2">
+                    <button type="button" id="reset-filter" class="btn-outline">
+                        重置筛选
+                    </button>
+                    <button type="submit" class="btn-primary">
+                        <i class="fa fa-filter mr-2"></i> 筛选
+                    </button>
+                </div>
+            </form>
+        </div>
+        
+        <!-- 错题列表 -->
+        <div class="card">
+            <div class="p-6 border-b border-gray-100">
+                <h2 class="text-xl font-bold">错题列表</h2>
+            </div>
+            
+            {% if questions %}
+                <div class="responsive-table">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    年级
+                                </th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    科目
+                                </th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    考试类型
+                                </th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    上传日期
+                                </th>
+                                <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    操作
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200">
+                            {% for question in questions %}
+                                <tr class="hover:bg-gray-50 transition-colors">
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                        <span class="text-sm text-gray-900">{{ question.grade or '未设置' }}</span>
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                        <span class="text-sm text-gray-900">{{ question.subject or '未分类' }}</span>
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                        <span class="text-sm text-gray-900">{{ question.exam or '未设置' }}</span>
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                        <span class="text-sm text-gray-500">{{ question.upload_time.strftime('%Y-%m-%d') }}</span>
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                        <a href="{{ url_for('main.view_question', question_id=question.id) }}"
+                                           class="text-primary hover:text-primary/80 mr-3 transition-colors"
+                                           data-new-window>
+                                            查看
+                                        </a>
+                                        <a href="{{ url_for('main.edit_question', question_id=question.id) }}"
+                                           class="text-gray-600 hover:text-gray-900 transition-colors">
+                                            编辑
+                                        </a>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="text-center py-16 text-gray-500">
+                    <i class="fa fa-file-text-o text-5xl mb-4 opacity-30"></i>
+                    <p class="text-lg">没有找到符合条件的错题记录</p>
+                    <a href="{{ url_for('main.upload_question') }}" class="text-primary hover:underline mt-2 inline-block">
+                        点击上传新错题
+                    </a>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // 重置筛选按钮
+    const resetBtn = document.getElementById('reset-filter');
+    if (resetBtn) {
+        resetBtn.addEventListener('click', function() {
+            // 清空所有筛选条件
+            document.querySelectorAll('select, input[name="search"]').forEach(element => {
+                element.value = '';
+            });
+        });
+    }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,673 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ analysis.title }} - 学析优{% endblock %}
+
+{% block head %}
+<!-- 使用更可靠的CDN加载Chart.js -->
+<script src="https://unpkg.com/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<section class="section">
+    <div class="max-w-5xl mx-auto">
+        <div class="text-center mb-10">
+            <h1 class="text-3xl font-bold mb-3">{{ analysis.title }}</h1>
+            <p class="text-gray-600">生成时间: {{ analysis.create_time.strftime('%Y-%m-%d %H:%M') }}</p>
+        </div>
+
+        <!-- 隐藏的数据存储区域 -->
+        <div id="chart-data" style="display: none;"
+             data-exams="{{ analysis.related_exams }}"
+             data-questions="{{ analysis.related_questions }}"
+             data-content='{{ analysis.content | tojson | safe }}'>
+        </div>
+
+        <div class="card mb-8">
+            <div class="p-6 border-b border-gray-100">
+                <h2 class="text-xl font-bold">分析概览</h2>
+            </div>
+            <div class="p-6">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="bg-blue-50 rounded-lg p-5 text-center hover:shadow-md transition-shadow cursor-pointer" onclick="scrollToSection('score-trend')">
+                        <div class="text-4xl font-bold text-primary mb-2">
+                            <i class="fa fa-line-chart"></i>
+                        </div>
+                        <h3 class="font-medium mb-1">成绩趋势</h3>
+                        <p class="text-sm text-gray-600">基于历史考试数据</p>
+                    </div>
+                    <div class="bg-green-50 rounded-lg p-5 text-center hover:shadow-md transition-shadow cursor-pointer" onclick="scrollToSection('subject-compare')">
+                        <div class="text-4xl font-bold text-secondary mb-2">
+                            <i class="fa fa-trophy"></i>
+                        </div>
+                        <h3 class="font-medium mb-1">优势学科</h3>
+                        <p class="text-sm text-gray-600">表现突出的科目</p>
+                    </div>
+                    <div class="bg-yellow-50 rounded-lg p-5 text-center hover:shadow-md transition-shadow cursor-pointer" onclick="scrollToSection('error-category')">
+                        <div class="text-4xl font-bold text-accent mb-2">
+                            <i class="fa fa-exclamation-triangle"></i>
+                        </div>
+                        <h3 class="font-medium mb-1">待提升领域</h3>
+                        <p class="text-sm text-gray-600">需要重点关注的方面</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 成绩趋势图 -->
+        <div class="card mb-8" id="score-trend-section">
+            <div class="p-6 border-b border-gray-100">
+                <h2 class="text-xl font-bold">成绩趋势分析</h2>
+            </div>
+            <div class="p-6">
+                <div class="chart-container" style="height: 400px;">
+                    <canvas id="score-trend-chart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- 学科对比图 -->
+        <div class="card mb-8" id="subject-compare-section">
+            <div class="p-6 border-b border-gray-100">
+                <h2 class="text-xl font-bold">学科能力对比</h2>
+            </div>
+            <div class="p-6">
+                <div class="chart-container" style="height: 400px;">
+                    <canvas id="subject-compare-chart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- 错题分类图 -->
+        <div class="card mb-8" id="error-category-section">
+            <div class="p-6 border-b border-gray-100">
+                <h2 class="text-xl font-bold">错题类型分析</h2>
+            </div>
+            <div class="p-6">
+                <div class="chart-container" style="height: 400px;">
+                    <canvas id="error-category-chart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- 分析详情 -->
+        <div class="card">
+            <div class="p-6 border-b border-gray-100">
+                <h2 class="text-xl font-bold">详细分析与建议</h2>
+            </div>
+            <div class="p-6 prose max-w-none" id="analysis-content">
+                <!-- Markdown内容将在这里渲染 -->
+            </div>
+        </div>
+
+        <!-- 操作按钮 -->
+        <div class="mt-8 flex justify-center">
+            <button onclick="window.print()" class="btn-outline mr-4">
+                <i class="fa fa-print mr-2"></i> 打印报告
+            </button>
+            <a href="{{ url_for('main.grade_analysis') }}" class="btn-primary">
+                <i class="fa fa-refresh mr-2"></i> 生成新报告
+            </a>
+        </div>
+    </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// 全局变量存储图表实例
+let charts = {};
+
+// 等待Chart.js加载完成
+function waitForChartJS(callback, maxAttempts = 50) {
+    let attempts = 0;
+
+    function checkChart() {
+        attempts++;
+        console.log(`检查Chart.js加载状态，尝试次数: ${attempts}`);
+
+        if (typeof Chart !== 'undefined') {
+            console.log("Chart.js已加载");
+            callback();
+        } else if (attempts < maxAttempts) {
+            setTimeout(checkChart, 200);
+        } else {
+            console.error("Chart.js加载超时");
+            // 尝试手动加载Chart.js
+            const script = document.createElement('script');
+            script.src = 'https://unpkg.com/chart.js@4.4.0/dist/chart.umd.min.js';
+            script.onload = callback;
+            document.head.appendChild(script);
+        }
+    }
+
+    checkChart();
+}
+
+// 将Markdown转换为HTML
+function markdownToHTML(markdown) {
+    try {
+        console.log("开始转换Markdown:", markdown);
+
+        // 转换标题
+        let html = markdown
+            .replace(/^### (.*$)/gim, '<h3 class="text-lg font-semibold mt-6 mb-3 text-gray-800">$1</h3>')
+            .replace(/^## (.*$)/gim, '<h2 class="text-xl font-semibold mt-8 mb-4 text-gray-800 border-b-2 border-gray-200 pb-2">$1</h2>')
+            .replace(/^# (.*$)/gim, '<h1 class="text-2xl font-bold mt-10 mb-6 text-gray-900">$1</h1>');
+
+        // 转换粗体
+        html = html.replace(/\*\*(.*?)\*\*/g, '<strong class="font-semibold text-gray-800">$1</strong>');
+
+        // 转换斜体
+        html = html.replace(/\*(.*?)\*/g, '<em class="italic text-gray-700">$1</em>');
+
+        // 转换代码块
+        html = html.replace(/```([\s\S]*?)```/g, '<pre class="bg-gray-100 p-4 rounded-lg overflow-x-auto my-4 text-sm"><code>$1</code></pre>');
+
+        // 转换行内代码
+        html = html.replace(/`([^`]+)`/g, '<code class="bg-gray-100 px-1 py-0.5 rounded text-sm">$1</code>');
+
+        // 转换无序列表
+        html = html.replace(/^- (.*$)/gim, '<li class="ml-4 mb-1">• $1</li>');
+
+        // 处理连续的无序列表项
+        html = html.replace(/(<li class="ml-4 mb-1">.*<\/li>)\s*(?=<li class="ml-4 mb-1">)/g, '$1');
+        html = html.replace(/(<li class="ml-4 mb-1">.*<\/li>)(?!\s*<li)/g, '<ul class="list-disc ml-6 mb-4 space-y-1">$1</ul>');
+
+        // 转换有序列表
+        html = html.replace(/^\d+\. (.*$)/gim, '<li class="ml-4 mb-1">$1</li>');
+
+        // 处理连续的有序列表项
+        html = html.replace(/(<li class="ml-4 mb-1">.*<\/li>)\s*(?=<li class="ml-4 mb-1">)/g, '$1');
+        html = html.replace(/(<li class="ml-4 mb-1">.*<\/li>)(?!\s*<li)/g, '<ol class="list-decimal ml-6 mb-4 space-y-1">$1</ol>');
+
+        // 转换链接
+        html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" class="text-blue-600 hover:text-blue-800 underline">$1</a>');
+
+        // 转换表格
+        html = html.replace(/\|(.+)\|/g, (match, p1) => {
+            return `<td class="border px-4 py-2">${p1.trim()}</td>`;
+        });
+
+        // 处理表格行
+        html = html.replace(/^(\|.*\|)$/gm, (match) => {
+            return `<tr class="border-b">${match}</tr>`;
+        });
+
+        // 处理表格开始和结束
+        html = html.replace(/(<tr class="border-b">.*<\/tr>)/s, '<table class="min-w-full divide-y divide-gray-200 my-4">$1</table>');
+
+        // 转换换行
+        html = html.replace(/\n/g, '<br>');
+
+        // 处理多个连续的<br>标签
+        html = html.replace(/(<br\s*\/?>){2,}/g, '</p><p class="mb-4">');
+
+        // 包装段落
+        if (!html.startsWith('<h') && !html.startsWith('<p') && !html.startsWith('<pre') && !html.startsWith('<ul') && !html.startsWith('<ol') && !html.startsWith('<table')) {
+            html = '<p class="mb-4 text-gray-700">' + html;
+        }
+
+        if (!html.endsWith('</p>') && !html.endsWith('</h1>') && !html.endsWith('</h2>') && !html.endsWith('</h3>') && !html.endsWith('</ul>') && !html.endsWith('</ol>') && !html.endsWith('</pre>') && !html.endsWith('</table>')) {
+            html = html + '</p>';
+        }
+
+        console.log("转换后的HTML:", html);
+        return html;
+    } catch (error) {
+        console.error("Markdown转换错误:", error);
+        return markdown; // 如果转换失败，返回原始内容
+    }
+}
+
+// 渲染Markdown内容
+function renderMarkdown() {
+    try {
+        const contentElement = document.getElementById('analysis-content');
+        if (!contentElement) {
+            console.error("找不到分析内容元素");
+            return;
+        }
+
+        // 获取原始内容
+        const chartDataElement = document.getElementById('chart-data');
+        if (!chartDataElement) {
+            console.error("找不到图表数据元素");
+            return;
+        }
+
+        const content = chartDataElement.getAttribute('data-content');
+        if (!content) {
+            console.error("找不到分析内容");
+            return;
+        }
+
+        // 解析JSON内容
+        let analysisContent;
+        try {
+            analysisContent = JSON.parse(content);
+            console.log("解析后的分析内容:", analysisContent);
+        } catch (e) {
+            console.error('解析分析内容失败:', e);
+            return;
+        }
+
+        console.log("原始内容:", analysisContent);
+
+        // 隐藏结构化数据部分
+        let processedContent = analysisContent;
+        const structuredDataMatch = processedContent.match(/### 结构化数据[\s\S]*?$/m);
+        if (structuredDataMatch) {
+            processedContent = processedContent.substring(0, structuredDataMatch.index);
+        }
+
+        // 转换Markdown为HTML
+        const htmlContent = markdownToHTML(processedContent);
+        contentElement.innerHTML = htmlContent;
+    } catch (error) {
+        console.error("渲染Markdown内容错误:", error);
+    }
+}
+
+// 从分析内容中提取结构化数据
+function extractStructuredData(content) {
+    try {
+        const data = {
+            scoreTrend: {
+                labels: [],
+                datasets: []
+            },
+            subjectCompare: {
+                labels: [],
+                datasets: []
+            },
+            errorCategory: {
+                labels: [],
+                datasets: []
+            }
+        };
+
+        console.log("开始提取结构化数据，原始内容:", content);
+
+        // 提取成绩趋势数据
+        const scoreTrendMatch = content.match(/成绩趋势数据：[\s\S]*?(?=\n\n```|\n###|$)/);
+        if (scoreTrendMatch) {
+            const scoreTrendText = scoreTrendMatch[0];
+            console.log("找到成绩趋势部分:", scoreTrendText);
+
+            const scoreMatches = scoreTrendText.match(/- (.*?): (\d+)/g);
+            if (scoreMatches && scoreMatches.length > 0) {
+                const labels = [];
+                const scores = [];
+
+                scoreMatches.forEach(match => {
+                    const matchResult = match.match(/- (.*?): (\d+)/);
+                    if (matchResult) {
+                        const [, examName, score] = matchResult;
+                        if (examName && score) {
+                            labels.push(examName.trim());
+                            scores.push(parseInt(score));
+                        }
+                    }
+                });
+
+                console.log("提取的成绩趋势数据:", { labels, scores });
+
+                if (labels.length > 0 && scores.length > 0) {
+                    data.scoreTrend.labels = labels;
+                    data.scoreTrend.datasets.push({
+                        label: '总分',
+                        data: scores,
+                        borderColor: '#4F46E5',
+                        backgroundColor: 'rgba(79, 70, 229, 0.1)',
+                        tension: 0.3,
+                        fill: true
+                    });
+                }
+            }
+        }
+
+        // 提取学科对比数据
+        const subjectCompareMatch = content.match(/学科对比数据：[\s\S]*?(?=\n\n```|\n###|$)/);
+        if (subjectCompareMatch) {
+            const subjectCompareText = subjectCompareMatch[0];
+            console.log("找到学科对比部分:", subjectCompareText);
+
+            const subjectMatches = subjectCompareText.match(/- (.*?): (\d+)/g);
+            if (subjectMatches && subjectMatches.length > 0) {
+                const labels = [];
+                const scores = [];
+
+                subjectMatches.forEach(match => {
+                    const matchResult = match.match(/- (.*?): (\d+)/);
+                    if (matchResult) {
+                        const [, subject, score] = matchResult;
+                        if (subject && score) {
+                            labels.push(subject.trim());
+                            scores.push(parseInt(score));
+                        }
+                    }
+                });
+
+                console.log("提取的学科对比数据:", { labels, scores });
+
+                if (labels.length > 0 && scores.length > 0) {
+                    data.subjectCompare.labels = labels;
+                    data.subjectCompare.datasets.push({
+                        label: '最近一次考试',
+                        data: scores,
+                        backgroundColor: [
+                            'rgba(79, 70, 229, 0.2)',
+                            'rgba(16, 185, 129, 0.2)',
+                            'rgba(245, 158, 11, 0.2)'
+                        ],
+                        borderColor: [
+                            '#4F46E5',
+                            '#10B981',
+                            '#F59E0B'
+                        ],
+                        borderWidth: 1
+                    });
+                }
+            }
+        }
+
+        // 提取错题类型数据 - 修改这部分
+        const errorCategoryMatch = content.match(/错题类型数据：[\s\S]*?(?=\n\n```|\n###|$)/);
+        if (errorCategoryMatch) {
+            const errorCategoryText = errorCategoryMatch[0];
+            console.log("找到错题类型部分:", errorCategoryText);
+
+            const errorMatches = errorCategoryText.match(/- (.*?): (\d+)%/g);
+            if (errorMatches && errorMatches.length > 0) {
+                const labels = [];
+                const values = [];
+
+                errorMatches.forEach(match => {
+                    const matchResult = match.match(/- (.*?): (\d+)%/);
+                    if (matchResult) {
+                        const [, errorType, percentage] = matchResult;
+                        if (errorType && percentage) {
+                            labels.push(errorType.trim());
+                            values.push(parseFloat(percentage)); // 使用parseFloat而不是parseInt
+                        }
+                    }
+                });
+
+                console.log("提取的错题类型数据:", { labels, values });
+
+                if (labels.length > 0 && values.length > 0) {
+                    data.errorCategory.labels = labels;
+                    data.errorCategory.datasets.push({
+                        data: values,
+                        backgroundColor: [
+                            '#4F46E5',
+                            '#10B981',
+                            '#F59E0B',
+                            '#EF4444',
+                            '#8B5CF6'
+                        ],
+                        borderWidth: 1
+                    });
+                }
+            }
+        }
+        console.log("最终提取的结构化数据:", data);
+        return data;
+    } catch (error) {
+        console.error("提取结构化数据错误:", error);
+        return {
+            scoreTrend: { labels: [], datasets: [] },
+            subjectCompare: { labels: [], datasets: [] },
+            errorCategory: { labels: [], datasets: [] }
+        };
+    }
+}
+
+// 滚动到指定区域
+function scrollToSection(sectionId) {
+    try {
+        const section = document.getElementById(sectionId + '-section');
+        if (section) {
+            section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+            // 高亮效果
+            section.classList.add('ring-2', 'ring-primary', 'ring-opacity-50');
+            setTimeout(() => {
+                section.classList.remove('ring-2', 'ring-primary', 'ring-opacity-50');
+            }, 2000);
+        }
+    } catch (error) {
+        console.error("滚动到指定区域错误:", error);
+    }
+}
+
+// 初始化图表
+function initCharts() {
+    try {
+        console.log("初始化图表，Chart.js状态:", typeof Chart);
+
+        // 获取数据
+        const chartDataElement = document.getElementById('chart-data');
+        if (!chartDataElement) {
+            console.error("找不到图表数据元素");
+            return;
+        }
+
+        const content = chartDataElement.getAttribute('data-content');
+        if (!content) {
+            console.error("找不到分析内容");
+            return;
+        }
+
+        // 解析JSON内容
+        let analysisContent;
+        try {
+            analysisContent = JSON.parse(content);
+            console.log("解析后的分析内容:", analysisContent);
+        } catch (e) {
+            console.error('解析分析内容失败:', e);
+            return;
+        }
+
+        // 从内容中提取结构化数据
+        const chartData = extractStructuredData(analysisContent);
+
+        // 打印三个分析区域的数据
+        console.log("成绩趋势数据:", chartData.scoreTrend);
+        console.log("学科对比数据:", chartData.subjectCompare);
+        console.log("错题类型数据:", chartData.errorCategory);
+
+        // 成绩趋势图
+        const scoreTrendCtx = document.getElementById('score-trend-chart');
+        if (scoreTrendCtx) {
+            if (chartData.scoreTrend.labels.length > 0 && chartData.scoreTrend.datasets.length > 0) {
+                console.log("初始化成绩趋势图");
+                charts.scoreTrend = new Chart(scoreTrendCtx, {
+                    type: 'line',
+                    data: chartData.scoreTrend,
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        interaction: {
+                            mode: 'index',
+                            intersect: false,
+                        },
+                        plugins: {
+                            legend: {
+                                position: 'top',
+                            },
+                            tooltip: {
+                                usePointStyle: true,
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: false,
+                                min: 0,
+                                ticks: {
+                                    stepSize: 50
+                                }
+                            }
+                        },
+                        animation: {
+                            duration: 1000,
+                            easing: 'easeOutQuart'
+                        }
+                    }
+                });
+            } else {
+                console.log("成绩趋势图没有数据，显示空状态");
+                // 如果没有数据，显示空状态
+                const emptyState = document.createElement('div');
+                emptyState.className = 'text-center py-10 text-gray-500';
+                emptyState.innerHTML = '<i class="fa fa-chart-line text-4xl mb-3 opacity-30"></i><p>暂无成绩趋势数据</p>';
+                scoreTrendCtx.parentNode.appendChild(emptyState);
+            }
+        }
+
+        // 学科对比图
+        const subjectCompareCtx = document.getElementById('subject-compare-chart');
+        if (subjectCompareCtx) {
+            if (chartData.subjectCompare.labels.length > 0 && chartData.subjectCompare.datasets.length > 0) {
+                console.log("初始化学科对比图");
+                charts.subjectCompare = new Chart(subjectCompareCtx, {
+                    type: 'bar',
+                    data: chartData.subjectCompare,
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'top',
+                            },
+                            tooltip: {
+                                usePointStyle: true,
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                max: 100,
+                                ticks: {
+                                    stepSize: 20
+                                }
+                            }
+                        },
+                        animation: {
+                            duration: 1000,
+                            easing: 'easeOutQuart'
+                        }
+                    }
+                });
+            } else {
+                console.log("学科对比图没有数据，显示空状态");
+                // 如果没有数据，显示空状态
+                const emptyState = document.createElement('div');
+                emptyState.className = 'text-center py-10 text-gray-500';
+                emptyState.innerHTML = '<i class="fa fa-chart-bar text-4xl mb-3 opacity-30"></i><p>暂无学科对比数据</p>';
+                subjectCompareCtx.parentNode.appendChild(emptyState);
+            }
+        }
+
+        // 错题类型分析图
+        const errorCategoryCtx = document.getElementById('error-category-chart');
+        if (errorCategoryCtx) {
+            if (chartData.errorCategory.labels.length > 0 && chartData.errorCategory.datasets.length > 0) {
+                console.log("初始化错题类型分析图");
+
+                // 过滤掉值为0的数据项
+                const filteredLabels = [];
+                const filteredValues = [];
+                const filteredColors = [];
+
+                const colors = ['#4F46E5', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6'];
+
+                for (let i = 0; i < chartData.errorCategory.labels.length; i++) {
+                    if (chartData.errorCategory.datasets[0].data[i] > 0) {
+                        filteredLabels.push(chartData.errorCategory.labels[i]);
+                        filteredValues.push(chartData.errorCategory.datasets[0].data[i]);
+                        filteredColors.push(colors[i % colors.length]);
+                    }
+                }
+
+                // 如果过滤后没有数据，则显示所有数据（包括0值）
+                const finalLabels = filteredLabels.length > 0 ? filteredLabels : chartData.errorCategory.labels;
+                const finalValues = filteredValues.length > 0 ? filteredValues : chartData.errorCategory.datasets[0].data;
+                const finalColors = filteredColors.length > 0 ? filteredColors : colors.slice(0, finalLabels.length);
+
+                charts.errorCategory = new Chart(errorCategoryCtx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: finalLabels,
+                        datasets: [{
+                            data: finalValues,
+                            backgroundColor: finalColors,
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'right',
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        return `${context.label}: ${context.raw}%`;
+                                    }
+                                }
+                            }
+                        },
+                        animation: {
+                            animateRotate: true,
+                            animateScale: true,
+                            duration: 1000,
+                            easing: 'easeOutQuart'
+                        }
+                    }
+                });
+            } else {
+                console.log("错题类型分析图没有数据，显示空状态");
+                // 如果没有数据，显示空状态
+                const emptyState = document.createElement('div');
+                emptyState.className = 'text-center py-10 text-gray-500';
+                emptyState.innerHTML = '<i class="fa fa-chart-pie text-4xl mb-3 opacity-30"></i><p>暂无错题类型数据</p>';
+                errorCategoryCtx.parentNode.appendChild(emptyState);
+            }
+        }
+    } catch (error) {
+        console.error("初始化图表错误:", error);
+    }
+}
+
+// 页面加载完成后初始化
+document.addEventListener('DOMContentLoaded', function() {
+    try {
+        console.log("DOM内容已加载，开始初始化");
+
+        // 检查图表数据元素
+        const chartDataElement = document.getElementById('chart-data');
+        if (chartDataElement) {
+            console.log("找到图表数据元素");
+            const content = chartDataElement.getAttribute('data-content');
+            console.log("图表数据内容:", content);
+        } else {
+            console.error("找不到图表数据元素");
+        }
+
+        // 渲染Markdown内容
+        renderMarkdown();
+
+        // 等待Chart.js加载完成后再初始化图表
+        waitForChartJS(function() {
+            console.log("Chart.js已加载，开始初始化图表");
+            initCharts();
+        });
+    } catch (error) {
+        console.error("页面初始化错误:", error);
+    }
+});
+</script>
+{% endblock %}
